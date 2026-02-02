@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  Alert,
   KeyboardAvoidingView,
   Platform,
   Animated as RNAnimated,
@@ -25,11 +26,25 @@ import {
   GradientButton,
   IconButton,
 } from "../src/components";
-import { discoveryManager } from "../src/network/discoveryManager";
+import { discoveryManager, sessionRegistry } from "../src/network";
 import type { DiscoveredSessionData } from "../src/network/types";
 import { theme } from "../src/theme";
 
 const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
+
+/**
+ * Format session code to XXX-XXX format
+ */
+const formatSessionCode = (text: string): string => {
+  // Remove all non-alphanumeric characters
+  const clean = text.replace(/[^A-Z0-9]/gi, "").toUpperCase();
+
+  // Add dash after 3 characters
+  if (clean.length <= 3) {
+    return clean;
+  }
+  return `${clean.slice(0, 3)}-${clean.slice(3, 6)}`;
+};
 
 export default function JoinSessionScreen() {
   const router = useRouter();
@@ -118,6 +133,7 @@ export default function JoinSessionScreen() {
 
   const handleJoinSession = (session?: DiscoveredSessionData) => {
     if (session) {
+      // Joining via discovered session (mDNS/UDP scan)
       router.push({
         pathname: "/player-room",
         params: {
@@ -129,30 +145,47 @@ export default function JoinSessionScreen() {
       return;
     }
 
-    if (!sessionCode.trim()) {
+    // Joining via manual code entry
+    if (!sessionCode.trim() || sessionCode.length < 7) {
+      Alert.alert(
+        "Invalid Code",
+        "Please enter a valid 6-character session code in format XXX-XXX",
+      );
       return;
     }
 
-    // Strip dashes for ID
+    // Strip dashes and validate format
     const cleanId = sessionCode.replace(/[^A-Z0-9]/g, "");
 
+    if (cleanId.length !== 6) {
+      Alert.alert(
+        "Invalid Code",
+        "Session code must be exactly 6 characters (XXX-XXX)",
+      );
+      return;
+    }
+
+    // Validate session code exists and is active
+    const validation = sessionRegistry.validateSessionCode(cleanId);
+
+    if (!validation.valid) {
+      Alert.alert(
+        "Cannot Join Session",
+        validation.reason ||
+          "The session code you entered is invalid or no longer active.",
+      );
+      return;
+    }
+
+    // Navigate to player room as guest with validated session
     router.push({
       pathname: "/player-room",
       params: {
-        sessionId: cleanId,
-        sessionName: "Party Room",
+        sessionId: validation.sessionId!,
+        sessionName: validation.sessionName || "Party Room",
         isHost: "false",
       },
     });
-  };
-
-  const formatSessionCode = (text: string) => {
-    // Auto-format as XXX-XXX
-    const cleaned = text.replace(/[^A-Za-z0-9]/g, "").toUpperCase();
-    if (cleaned.length <= 3) {
-      return cleaned;
-    }
-    return `${cleaned.slice(0, 3)}-${cleaned.slice(3, 6)}`;
   };
 
   return (

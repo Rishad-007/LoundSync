@@ -15,10 +15,10 @@ const LOUDSYNC_DOMAIN = ".local.";
 
 // Add helper type to fix type checking
 interface ZeroconfInstance {
-    scan(type: string, domain: string, timeout: number): void;
-    stop(): void;
-    on(event: string, callback: Function): void;
-    removeAllListeners(event: string): void;
+  scan(type: string, domain: string, timeout: number): void;
+  stop(): void;
+  on(event: string, callback: Function): void;
+  removeAllListeners(event: string): void;
 }
 
 /**
@@ -66,20 +66,22 @@ export class MDNSDiscoveryService {
     this.sessions.clear();
 
     console.log("[mDNS] Starting scan for LOUDSYNC sessions...");
-    
+
     // Double check instance availability
     if (!this.zeroconf) {
       console.warn("[mDNS] Zeroconf not available (pre-scan check)");
       this.isScanning = false;
-      return Promise.reject(new Error("mDNS not available - native module missing"));
+      return Promise.reject(
+        new Error("mDNS not available - native module missing"),
+      );
     }
 
     return new Promise((resolve, reject) => {
       try {
         if (!this.zeroconf) {
-           this.isScanning = false;
-           reject(new Error("Zeroconf instance is null"));
-           return;
+          this.isScanning = false;
+          reject(new Error("Zeroconf instance is null"));
+          return;
         }
 
         // Listen for services resolved (with full details)
@@ -98,14 +100,14 @@ export class MDNSDiscoveryService {
         // Start scan
         try {
           if (this.zeroconf) {
-             this.zeroconf.scan(LOUDSYNC_SERVICE_TYPE, LOUDSYNC_DOMAIN, 5000);
+            this.zeroconf.scan(LOUDSYNC_SERVICE_TYPE, LOUDSYNC_DOMAIN, 5000);
           } else {
-             throw new Error("Zeroconf became null before scan");
+            throw new Error("Zeroconf became null before scan");
           }
         } catch (scanError) {
-           console.warn("[mDNS] Scan start failed (native warning):", scanError);
-           // Don't reject yet, listeners might still work if it's just a warning
-           // But if it's fatal, catch block below handles it
+          console.warn("[mDNS] Scan start failed (native warning):", scanError);
+          // Don't reject yet, listeners might still work if it's just a warning
+          // But if it's fatal, catch block below handles it
         }
 
         // Auto-stop after timeout
@@ -133,21 +135,27 @@ export class MDNSDiscoveryService {
       this.scanTimeout = null;
     }
 
-    try {
-      const zeroconf = this.zeroconf;
-      if (zeroconf) {
-        if (typeof zeroconf.stop === "function") {
-          zeroconf.stop();
-        }
-        if (typeof zeroconf.removeAllListeners === "function") {
-          zeroconf.removeAllListeners("resolved");
-          zeroconf.removeAllListeners("remove");
-        }
+    const zeroconf = this.zeroconf;
+    if (zeroconf) {
+      try {
+        zeroconf?.stop?.();
+      } catch {
+        // Silently ignore
       }
-      this.isScanning = false;
-    } catch (error) {
-      console.error("[mDNS] Failed to stop scan:", error);
+
+      try {
+        zeroconf?.removeAllListeners?.("resolved");
+      } catch {
+        // Silently ignore
+      }
+
+      try {
+        zeroconf?.removeAllListeners?.("remove");
+      } catch {
+        // Silently ignore
+      }
     }
+    this.isScanning = false;
   }
 
   /**
@@ -241,17 +249,25 @@ export class MDNSDiscoveryService {
    */
   destroy(): void {
     this.stopScan();
-    try {
-      const zeroconf = this.zeroconf;
-      if (zeroconf && typeof zeroconf.stop === "function") {
-        zeroconf.stop();
-        if (typeof zeroconf.removeAllListeners === "function") {
-            zeroconf.removeAllListeners("resolved");
-            zeroconf.removeAllListeners("remove");
-        }
+    const zeroconf = this.zeroconf;
+    if (zeroconf) {
+      try {
+        zeroconf?.stop?.();
+      } catch {
+        // Silently ignore
       }
-    } catch (error) {
-      console.error("[mDNS] Error destroying:", error);
+
+      try {
+        zeroconf?.removeAllListeners?.("resolved");
+      } catch {
+        // Silently ignore
+      }
+
+      try {
+        zeroconf?.removeAllListeners?.("remove");
+      } catch {
+        // Silently ignore
+      }
     }
   }
 }

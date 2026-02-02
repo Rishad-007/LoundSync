@@ -6,7 +6,7 @@
 /**
  * Discovery method used
  */
-export type DiscoveryMethod = "mdns" | "udp" | "manual";
+export type DiscoveryMethod = "mdns" | "udp" | "manual" | "simulated";
 
 /**
  * Network service info returned by mDNS
@@ -28,13 +28,13 @@ export interface SessionAdvertisement {
   sessionName: string;
   hostId: string;
   hostName: string;
-  hostAddress: string;
-  port: number;
+  hostAddress?: string; // Optional - may not be available in simulated mode
+  port?: number; // Optional - may not be available in simulated mode
   memberCount: number;
   maxMembers: number;
   isPasswordProtected: boolean;
   version: string;
-  timestamp: number;
+  timestamp?: number; // Optional - added by network layer
 }
 
 /**
@@ -45,6 +45,8 @@ export interface DiscoveredSessionData {
   discoveryMethod: DiscoveryMethod;
   signalStrength: number;
   lastSeen: number;
+  ipAddress?: string; // IP address of host (if available)
+  port?: number; // Port for connection (if available)
 }
 
 /**

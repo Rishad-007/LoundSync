@@ -44,6 +44,13 @@ export default function RootLayout() {
         />
 
         <Stack.Screen
+          name="guest-room"
+          options={{
+            animation: "slide_from_right",
+          }}
+        />
+
+        <Stack.Screen
           name="join-session"
           options={{
             animation: "slide_from_bottom",

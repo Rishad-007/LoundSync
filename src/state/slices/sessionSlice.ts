@@ -1,15 +1,18 @@
 /**
  * Session Slice - Phase 1
  * Manages session lifecycle (create, host, discover, join, leave)
- * Integrated with mDNS + UDP discovery
+ * Integrated with mDNS + UDP discovery + SessionServerManager
  */
 
 import { StateCreator } from "zustand";
-import { discoveryManager, hostBroadcastService } from "../../network";
+import {
+  discoveryManager,
+  hostBroadcastService,
+  sessionServerManager,
+} from "../../network";
 import type { MemberInfo } from "../../network/protocol";
 import type { SessionAdvertisement } from "../../network/types";
 import { WebSocketService } from "../../network/websocketClient";
-import { WebSocketServer } from "../../network/websocketServer";
 import type {
   ConnectionStatus,
   DiscoveredSession,
@@ -19,9 +22,8 @@ import type {
   SessionState,
 } from "../types";
 
-// Singleton instances for connection management
+// Singleton instance for WebSocket client (guests)
 let wsClient: WebSocketService | null = null;
-let wsServer: WebSocketServer | null = null;
 
 export type SessionSlice = SessionState & SessionActions;
 
@@ -191,35 +193,24 @@ export const createSessionSlice: StateCreator<
       // Start network broadcasts (mDNS + UDP)
       await hostBroadcastService.startBroadcast(advertisement, "192.168.1.100");
 
-      // Start WebSocket server for client connections
-      wsServer = new WebSocketServer({
-        port: 8080,
+      // Start WebSocket server using SessionServerManager
+      await sessionServerManager.createServer({
         sessionId: session.id,
         sessionName: session.name,
         hostId: localDevice.id,
         hostName: localDevice.name,
         maxMembers: session.maxMembers,
+        port: 8080,
       });
 
       // Setup server event handlers
-      wsServer.setHandlers({
-        onClientJoined: (client) => {
-          console.log("[SessionSlice] Client joined:", client.deviceName);
-
-          // Add client to member list
-          get().addMember({
-            id: client.deviceId,
-            name: client.deviceName,
-            role: "client",
-            connectionStatus: "connected",
-            joinedAt: client.joinedAt,
-            lastSeen: Date.now(),
-            address: client.address || "unknown",
-            latency: null,
-          });
+      sessionServerManager.setCallbacks({
+        onMemberJoined: (member) => {
+          console.log("[SessionSlice] Member joined:", member.name);
+          get().addMember(member);
         },
-        onClientLeft: (deviceId, reason) => {
-          console.log("[SessionSlice] Client left:", deviceId, reason);
+        onMemberLeft: (deviceId, reason) => {
+          console.log("[SessionSlice] Member left:", deviceId, reason);
           get().removeMember(deviceId);
         },
         onMemberListChanged: (members) => {
@@ -232,9 +223,17 @@ export const createSessionSlice: StateCreator<
             });
           }
         },
+        onServerStarted: () => {
+          console.log("[SessionSlice] ✅ Server started successfully");
+        },
+        onServerStopped: () => {
+          console.log("[SessionSlice] 🛑 Server stopped");
+        },
+        onServerError: (error) => {
+          console.error("[SessionSlice] Server error:", error);
+          set({ error: error.message });
+        },
       });
-
-      await wsServer.start();
 
       set({
         status: "hosting",
@@ -258,11 +257,8 @@ export const createSessionSlice: StateCreator<
     try {
       console.log("[SessionSlice] Stopping host...");
 
-      // Stop WebSocket server
-      if (wsServer) {
-        await wsServer.stop();
-        wsServer = null;
-      }
+      // Stop WebSocket server via SessionServerManager
+      await sessionServerManager.stopServer();
 
       // Stop network broadcasts
       hostBroadcastService.stopBroadcast();
@@ -309,8 +305,8 @@ export const createSessionSlice: StateCreator<
               name: session.advertisement.sessionName,
               hostId: session.advertisement.hostId,
               hostName: session.advertisement.hostName,
-              hostAddress: `${session.advertisement.hostAddress}:${session.advertisement.port}`,
-              createdAt: session.advertisement.timestamp,
+              hostAddress: `${session.advertisement.hostAddress || "unknown"}:${session.advertisement.port || 0}`,
+              createdAt: session.advertisement.timestamp || Date.now(),
               memberCount: session.advertisement.memberCount,
               maxMembers: session.advertisement.maxMembers,
               isPasswordProtected: session.advertisement.isPasswordProtected,

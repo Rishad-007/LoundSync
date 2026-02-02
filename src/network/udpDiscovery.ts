@@ -48,7 +48,9 @@ export class UDPDiscoveryService {
     return new Promise((resolve, reject) => {
       try {
         if (!UDP || typeof UDP.createSocket !== "function") {
-          throw new Error("UDP module not available or createSocket is not a function");
+          throw new Error(
+            "UDP module not available or createSocket is not a function",
+          );
         }
 
         // Create UDP socket

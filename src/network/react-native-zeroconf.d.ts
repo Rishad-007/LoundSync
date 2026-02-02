@@ -11,6 +11,7 @@ declare module "react-native-zeroconf" {
     on(event: "remove", callback: (name: string) => void): void;
     on(event: "resolved", callback: (result: any) => void): void;
     on(event: "error", callback: (err: any) => void): void;
+    removeAllListeners(event?: string): void;
     registerService(options: {
       name: string;
       type: string;

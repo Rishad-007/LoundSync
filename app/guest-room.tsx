@@ -29,36 +29,27 @@ import {
   GradientButton,
   IconButton,
 } from "../src/components";
-import { HostBroadcastService } from "../src/network/hostBroadcast";
-import {
-  useCurrentSession,
-  useIsHost,
-  useLoudSyncStore,
-  useMembers,
-} from "../src/state";
+import { useCurrentSession, useLoudSyncStore, useMembers } from "../src/state";
 import { theme } from "../src/theme";
 
 const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
 
-export default function PlayerRoomScreen() {
+export default function GuestRoomScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{
     sessionId: string;
     sessionName: string;
-    isHost: string;
   }>();
 
   // State integration
   const session = useCurrentSession();
   const members = useMembers();
-  const isHost = useIsHost();
-  const { leaveSession, stopHosting } = useLoudSyncStore();
+  const { leaveSession } = useLoudSyncStore();
 
   // Local state
-  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [isPlaying, setIsPlaying] = React.useState(false); // In real app, listen to session state
   const [volume, setVolume] = React.useState(0.75);
-  const [progress, setProgress] = React.useState(0.35);
-  const [broadcastService] = React.useState(() => new HostBroadcastService());
+  const [progress, setProgress] = React.useState(0.35); // In real app, sync with host
 
   // Derived state
   const connectedDevices = members.length;
@@ -80,51 +71,6 @@ export default function PlayerRoomScreen() {
 
   // Party color pulse
   const colorPulse = useSharedValue(0);
-
-  // Initialize host broadcast when entering as host
-  useEffect(() => {
-    const initializeBroadcast = async () => {
-      if (params.isHost === "true" && params.sessionId) {
-        console.log(
-          `🎙️ Starting host broadcast for session: ${params.sessionId}`,
-        );
-
-        try {
-          // Get local IP (placeholder - in production use actual network info)
-          const localIP = "192.168.1.100"; // TODO: Get actual local IP
-
-          // Start broadcasting
-          await broadcastService.startBroadcast(
-            {
-              sessionId: params.sessionId,
-              sessionName: params.sessionName || "Party Room",
-              hostId: `host-${Date.now()}`,
-              hostName: "Party Host",
-              memberCount: connectedDevices,
-              maxMembers: 8,
-              isPasswordProtected: false,
-              version: "1.0.0",
-            },
-            localIP,
-          );
-
-          console.log(`✅ Host broadcast started successfully`);
-        } catch (error) {
-          console.error("Failed to start host broadcast:", error);
-        }
-      }
-    };
-
-    initializeBroadcast();
-
-    // Cleanup on unmount
-    return () => {
-      if (params.isHost === "true") {
-        console.log("🛑 Stopping host broadcast");
-        broadcastService.stopBroadcast();
-      }
-    };
-  }, [params.isHost, params.sessionId]);
 
   useEffect(() => {
     // Start glow pulse
@@ -184,41 +130,24 @@ export default function PlayerRoomScreen() {
   }));
 
   const handleLeaveSession = async () => {
-    Alert.alert(
-      isHost ? "End Session?" : "Leave Session?",
-      isHost
-        ? "This will disconnect all users and end the session."
-        : "Are you sure you want to leave?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: isHost ? "End Session" : "Leave",
-          style: "destructive",
-          onPress: async () => {
-            if (isHost) {
-              await stopHosting();
-            } else {
-              leaveSession();
-            }
-            router.replace("/home");
-          },
+    Alert.alert("Leave Session?", "Are you sure you want to leave?", [
+      { text: "Cancel", style: "cancel" },
+      {
+        text: "Leave",
+        style: "destructive",
+        onPress: async () => {
+          leaveSession();
+          router.replace("/home");
         },
-      ],
-    );
+      },
+    ]);
   };
 
   const handleShareSession = async () => {
     if (!session) return;
-
-    // Format session code as XXX-XXX
-    const sessionCode =
-      session.id.length === 6
-        ? `${session.id.slice(0, 3)}-${session.id.slice(3, 6)}`
-        : session.id;
-
     try {
       await Share.share({
-        message: `Join my LOUDSYNC party "${session.name}"! 🎵\nCode: ${sessionCode}\n\nMake sure you're on the same WiFi network!`,
+        message: `Join my LOUDSYNC party! Code: ${session.id}`,
       });
     } catch (error) {
       console.log(error);
@@ -280,18 +209,16 @@ export default function PlayerRoomScreen() {
                 size="md"
                 onPress={handleLeaveSession}
               />
-              {isHost && (
-                <View style={styles.hostBadge}>
-                  <Ionicons
-                    name="star"
-                    size={16}
-                    color={theme.colors.neon.yellow}
-                  />
-                  <AppText variant="caption" weight="bold">
-                    HOST
-                  </AppText>
-                </View>
-              )}
+              <View style={styles.guestBadge}>
+                <Ionicons
+                  name="headset"
+                  size={16}
+                  color={theme.colors.neon.cyan}
+                />
+                <AppText variant="caption" weight="bold">
+                  GUEST
+                </AppText>
+              </View>
             </View>
 
             <AppText variant="h2" weight="bold" center>
@@ -407,25 +334,23 @@ export default function PlayerRoomScreen() {
             style={styles.playerCard}
           >
             {/* Now Playing Badge */}
-            {isPlaying && (
-              <View style={styles.nowPlayingBadge}>
-                <LinearGradient
-                  colors={theme.gradients.party}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={styles.nowPlayingGradient}
+            <View style={styles.nowPlayingBadge}>
+              <LinearGradient
+                colors={theme.gradients.party}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 0 }}
+                style={styles.nowPlayingGradient}
+              >
+                <Ionicons name="radio" size={14} color={theme.colors.white} />
+                <AppText
+                  variant="caption"
+                  weight="bold"
+                  style={styles.nowPlayingText}
                 >
-                  <Ionicons name="radio" size={14} color={theme.colors.white} />
-                  <AppText
-                    variant="caption"
-                    weight="bold"
-                    style={styles.nowPlayingText}
-                  >
-                    NOW PLAYING
-                  </AppText>
-                </LinearGradient>
-              </View>
-            )}
+                  LISTENING
+                </AppText>
+              </LinearGradient>
+            </View>
 
             {/* Album Art with Waveform Overlay */}
             <View style={styles.albumArtContainer}>
@@ -466,30 +391,28 @@ export default function PlayerRoomScreen() {
             {/* Track Info */}
             <View style={styles.trackInfo}>
               <AppText variant="h3" weight="bold" center>
-                {isPlaying ? "Summer Vibes Mix" : "Ready to Play"}
+                {isPlaying ? "Summer Vibes Mix" : "Waiting for Host..."}
               </AppText>
               <AppText
                 variant="body"
                 color={theme.colors.text.secondary}
                 center
               >
-                {isPlaying
-                  ? "Various Artists • 2024"
-                  : "Select a track to begin"}
+                {isPlaying ? "Various Artists • 2024" : "Syncing to session..."}
               </AppText>
             </View>
 
-            {/* Seek Slider with Progress */}
+            {/* Seek Slider (Read-only for Guest) */}
             <View style={styles.progressContainer}>
               <Slider
                 style={styles.slider}
                 minimumValue={0}
                 maximumValue={1}
                 value={progress}
-                onValueChange={setProgress}
+                disabled={true} // Guests cannot seek?
                 minimumTrackTintColor={theme.colors.neon.pink}
                 maximumTrackTintColor={theme.colors.glass.light}
-                thumbTintColor={theme.colors.neon.pink}
+                thumbTintColor={theme.colors.glass.medium} // Dim thumb
               />
               <View style={styles.progressTime}>
                 <AppText variant="caption">
@@ -500,49 +423,7 @@ export default function PlayerRoomScreen() {
               </View>
             </View>
 
-            {/* Player Controls */}
-            <View style={styles.controls}>
-              <IconButton
-                icon={
-                  <Ionicons
-                    name="play-skip-back"
-                    size={28}
-                    color={theme.colors.white}
-                  />
-                }
-                variant="ghost"
-                size="lg"
-                onPress={() => console.log("Previous")}
-              />
-
-              <IconButton
-                icon={
-                  <Ionicons
-                    name={isPlaying ? "pause" : "play"}
-                    size={36}
-                    color={theme.colors.white}
-                  />
-                }
-                variant="gradient"
-                gradient="primary"
-                size="lg"
-                onPress={() => setIsPlaying(!isPlaying)}
-              />
-
-              <IconButton
-                icon={
-                  <Ionicons
-                    name="play-skip-forward"
-                    size={28}
-                    color={theme.colors.white}
-                  />
-                }
-                variant="ghost"
-                size="lg"
-                onPress={() => console.log("Next")}
-              />
-            </View>
-
+            {/* Controls (Volume Only for Guest) */}
             {/* Volume Slider */}
             <View style={styles.volumeContainer}>
               <Ionicons
@@ -569,6 +450,14 @@ export default function PlayerRoomScreen() {
                 {Math.round(volume * 100)}%
               </AppText>
             </View>
+
+            <AppText
+              variant="caption"
+              color={theme.colors.text.tertiary}
+              style={{ marginTop: 8 }}
+            >
+              Playback controlled by Host
+            </AppText>
           </AnimatedGlassCard>
 
           {/* Actions */}
@@ -584,17 +473,6 @@ export default function PlayerRoomScreen() {
               icon={<Ionicons name="phone-portrait" size={20} color="white" />}
               onPress={handleDeviceList}
             />
-
-            {isHost && (
-              <GradientButton
-                title="Session Settings"
-                gradient="accent"
-                size="md"
-                fullWidth
-                icon={<Ionicons name="settings" size={20} color="white" />}
-                onPress={() => console.log("Settings")}
-              />
-            )}
 
             <GradientButton
               title="Leave Session"
@@ -709,7 +587,7 @@ export default function PlayerRoomScreen() {
                         color={theme.colors.text.tertiary}
                         center
                       >
-                        {isHost ? "Scanning..." : "Waiting..."}
+                        Waiting...
                       </AppText>
                     </View>
                   </GlassCard>
@@ -772,7 +650,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.borderRadius.full,
     backgroundColor: theme.colors.glass.medium,
   },
-  hostBadge: {
+  guestBadge: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.xs,
@@ -781,7 +659,7 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.borderRadius.full,
     borderWidth: 1,
-    borderColor: theme.colors.neon.yellow,
+    borderColor: theme.colors.neon.cyan,
   },
   infoCard: {
     marginBottom: theme.spacing.xl,

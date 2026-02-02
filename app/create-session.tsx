@@ -24,6 +24,7 @@ import {
   GradientButton,
   IconButton,
 } from "../src/components";
+import { sessionRegistry } from "../src/network";
 import { theme } from "../src/theme";
 
 const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
@@ -47,9 +48,32 @@ export default function CreateSessionScreen() {
     });
   };
 
+  const generateSessionCode = (): string => {
+    // Generate 6-character alphanumeric code in XXX-XXX format
+    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
+    let code = "";
+    for (let i = 0; i < 6; i++) {
+      code += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return `${code.slice(0, 3)}-${code.slice(3, 6)}`;
+  };
+
   const handleCreateSession = () => {
-    // Generate a mock session ID
-    const sessionId = Math.random().toString(36).substring(2, 8).toUpperCase();
+    const sessionCode = generateSessionCode();
+    // Remove dash for internal ID
+    const sessionId = sessionCode.replace("-", "");
+
+    // Register session in the registry BEFORE navigating
+    sessionRegistry.registerSession({
+      sessionId,
+      sessionCode: sessionId, // Store without dash
+      sessionName: sessionName || "My Party",
+      hostId: `host-${Date.now()}`, // Generate unique host ID
+      hostName: hostName || "Party Host",
+      maxMembers: parseInt(maxDevices) || 8,
+    });
+
+    console.log(`✅ Session registered: ${sessionCode} (ID: ${sessionId})`);
 
     router.push({
       pathname: "/player-room",

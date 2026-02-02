@@ -9,6 +9,15 @@ export type { HostBroadcastService } from "./hostBroadcast";
 export { mdnsService } from "./mdnsDiscovery";
 export type { MDNSDiscoveryService } from "./mdnsDiscovery";
 export * from "./protocol";
+export { sessionRegistry } from "./sessionRegistry";
+export { sessionServerManager } from "./sessionServerManager";
+export type {
+  SessionServerManager,
+  CreateServerOptions,
+  SessionServerCallbacks,
+} from "./sessionServerManager";
+export { simulatedDiscovery } from "./simulatedDiscovery";
+export type { SimulatedDiscoveryService } from "./simulatedDiscovery";
 export * from "./types";
 export { udpService } from "./udpDiscovery";
 export type { UDPDiscoveryService } from "./udpDiscovery";

@@ -4,6 +4,8 @@
  */
 
 import { mdnsService } from "./mdnsDiscovery";
+import { sessionRegistry } from "./sessionRegistry";
+import { simulatedDiscovery } from "./simulatedDiscovery";
 import type { DiscoveredSessionData, DiscoveryOptions } from "./types";
 import { udpService } from "./udpDiscovery";
 
@@ -28,6 +30,7 @@ export class DiscoveryManager {
     onFound: (session: DiscoveredSessionData) => void;
     onLost: (sessionId: string) => void;
   }> = [];
+  private usingSimulatedDiscovery = false;
 
   /**
    * Start discovery with optional fallback
@@ -52,14 +55,23 @@ export class DiscoveryManager {
         await this.runMDNSDiscovery(options);
       } else if (method === "udp") {
         await this.runUDPDiscovery(options);
+      } else if (method === "simulated") {
+        await this.runSimulatedDiscovery();
       } else {
-        // Default: try mDNS first, fall back to UDP
+        // Default: try mDNS first, fall back to UDP, then simulated
         try {
           await this.runMDNSDiscovery(options);
         } catch (error) {
           if (useFallback) {
             console.log("[DiscoveryManager] mDNS failed, trying UDP fallback");
-            await this.runUDPDiscovery(options);
+            try {
+              await this.runUDPDiscovery(options);
+            } catch (udpError) {
+              console.log(
+                "[DiscoveryManager] UDP also failed, using simulated discovery (Expo Go mode)",
+              );
+              await this.runSimulatedDiscovery();
+            }
           } else {
             throw error;
           }
@@ -71,20 +83,27 @@ export class DiscoveryManager {
       );
     } catch (error) {
       console.error("[DiscoveryManager] Discovery failed:", error);
-      this.isScanning = false;
-      this.stopExpiryCheck();
 
-      // Don't throw if it's just a native module issue - UDP will be used as fallback
-      if (useFallback && method !== "udp") {
-        console.log("[DiscoveryManager] Attempting UDP fallback...");
+      // Last resort: try simulated discovery
+      if (useFallback && !this.usingSimulatedDiscovery) {
+        console.log(
+          "[DiscoveryManager] All methods failed, falling back to simulated discovery",
+        );
         try {
-          await this.runUDPDiscovery(options);
-        } catch (udpError) {
+          await this.runSimulatedDiscovery();
+        } catch (simError) {
           console.error(
-            "[DiscoveryManager] UDP fallback also failed:",
-            udpError,
+            "[DiscoveryManager] Simulated discovery also failed:",
+            simError,
           );
+          this.isScanning = false;
+          this.stopExpiryCheck();
+          throw simError;
         }
+      } else {
+        this.isScanning = false;
+        this.stopExpiryCheck();
+        throw error;
       }
     }
   }
@@ -93,6 +112,7 @@ export class DiscoveryManager {
    * Run mDNS discovery
    */
   private async runMDNSDiscovery(options: DiscoveryOptions): Promise<void> {
+    this.usingSimulatedDiscovery = false;
     await mdnsService.startScan(
       (session) => this.addSession(session),
       (sessionId) => this.removeSession(sessionId),
@@ -104,6 +124,7 @@ export class DiscoveryManager {
    * Run UDP discovery
    */
   private async runUDPDiscovery(options: DiscoveryOptions): Promise<void> {
+    this.usingSimulatedDiscovery = false;
     await udpService.startScan(
       (session) => this.addSession(session),
       (sessionId) => this.removeSession(sessionId),
@@ -112,10 +133,33 @@ export class DiscoveryManager {
   }
 
   /**
+   * Run simulated discovery (for Expo Go when native modules unavailable)
+   */
+  private async runSimulatedDiscovery(): Promise<void> {
+    this.usingSimulatedDiscovery = true;
+    console.log("[DiscoveryManager] Using simulated discovery (Expo Go mode)");
+
+    simulatedDiscovery.startScan(
+      (session) => this.addSession(session),
+      (sessionId) => this.removeSession(sessionId),
+      2000, // Poll every 2 seconds
+    );
+  }
+
+  /**
    * Add or update discovered session
    */
   private addSession(data: DiscoveredSessionData): void {
     const sessionId = data.advertisement.sessionId;
+
+    // Validate session exists in registry
+    const validation = sessionRegistry.validateSessionCode(sessionId);
+    if (!validation.valid) {
+      console.warn(
+        `[DiscoveryManager] Rejecting session ${sessionId}: ${validation.reason}`,
+      );
+      return;
+    }
 
     // Deduplicate: if we've seen this session, update timestamp only
     if (this.sessions.has(sessionId)) {
@@ -201,11 +245,18 @@ export class DiscoveryManager {
 
     console.log("[DiscoveryManager] Stopping discovery");
 
+    // Stop all discovery methods
     mdnsService.stopScan();
     udpService.stopScan();
+
+    if (this.usingSimulatedDiscovery) {
+      simulatedDiscovery.stopScan();
+    }
+
     this.stopExpiryCheck();
 
     this.isScanning = false;
+    this.usingSimulatedDiscovery = false;
   }
 
   /**
