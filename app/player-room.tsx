@@ -1,9 +1,10 @@
 import { Ionicons } from "@expo/vector-icons";
+import Slider from "@react-native-community/slider";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import React, { useEffect, useRef, useState } from "react";
+import { Animated, ScrollView, StyleSheet, View } from "react-native";
 import {
   AppText,
   GlassCard,
@@ -22,6 +23,69 @@ export default function PlayerRoomScreen() {
 
   const [isPlaying, setIsPlaying] = useState(false);
   const [connectedDevices] = useState(3);
+  const [volume, setVolume] = useState(0.75);
+  const [progress, setProgress] = useState(0.35);
+  const [syncHealth, setSyncHealth] = useState(92); // 92% sync health
+
+  // Waveform animations
+  const waveAnims = useRef(
+    Array.from({ length: 20 }, () => new Animated.Value(0.3)),
+  ).current;
+
+  // Party color pulse animation
+  const colorPulse = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Waveform animation
+    if (isPlaying) {
+      const animations = waveAnims.map((anim, index) =>
+        Animated.loop(
+          Animated.sequence([
+            Animated.timing(anim, {
+              toValue: Math.random() * 0.7 + 0.3,
+              duration: 300 + Math.random() * 200,
+              useNativeDriver: true,
+            }),
+            Animated.timing(anim, {
+              toValue: Math.random() * 0.4 + 0.2,
+              duration: 300 + Math.random() * 200,
+              useNativeDriver: true,
+            }),
+          ]),
+        ),
+      );
+      Animated.stagger(50, animations).start();
+    } else {
+      waveAnims.forEach((anim) => {
+        Animated.timing(anim, {
+          toValue: 0.3,
+          duration: 300,
+          useNativeDriver: true,
+        }).start();
+      });
+    }
+
+    // Color pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(colorPulse, {
+          toValue: 1,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+        Animated.timing(colorPulse, {
+          toValue: 0,
+          duration: 2000,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+  }, [isPlaying]);
+
+  const colorPulseOpacity = colorPulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.1, 0.3],
+  });
 
   const isHost = params.isHost === "true";
 
@@ -43,6 +107,32 @@ export default function PlayerRoomScreen() {
         ]}
         style={styles.container}
       >
+        {/* Party Color Effects */}
+        <Animated.View
+          style={[
+            styles.colorEffect,
+            styles.colorEffectTop,
+            { opacity: colorPulseOpacity },
+          ]}
+        >
+          <LinearGradient
+            colors={[theme.colors.neon.pink + "60", "transparent"]}
+            style={styles.colorGradient}
+          />
+        </Animated.View>
+        <Animated.View
+          style={[
+            styles.colorEffect,
+            styles.colorEffectBottom,
+            { opacity: colorPulseOpacity },
+          ]}
+        >
+          <LinearGradient
+            colors={["transparent", theme.colors.neon.cyan + "60"]}
+            style={styles.colorGradient}
+          />
+        </Animated.View>
+
         <ScrollView
           contentContainerStyle={styles.scrollContent}
           showsVerticalScrollIndicator={false}
@@ -84,7 +174,7 @@ export default function PlayerRoomScreen() {
             </AppText>
           </View>
 
-          {/* Session Info */}
+          {/* Session Info with Sync Health */}
           <GlassCard intensity="medium" style={styles.infoCard}>
             <View style={styles.infoRow}>
               <View style={styles.infoItem}>
@@ -109,58 +199,144 @@ export default function PlayerRoomScreen() {
               <View style={styles.divider} />
               <View style={styles.infoItem}>
                 <Ionicons
-                  name="volume-high"
+                  name="pulse"
                   size={24}
-                  color={theme.colors.neon.purple}
+                  color={
+                    syncHealth >= 80
+                      ? theme.colors.neon.green
+                      : syncHealth >= 50
+                        ? theme.colors.neon.yellow
+                        : theme.colors.neon.orange
+                  }
                 />
-                <AppText variant="h4">85%</AppText>
+                <AppText variant="h4">{syncHealth}%</AppText>
                 <AppText variant="caption">Sync</AppText>
               </View>
+            </View>
+
+            {/* Sync Health Indicator */}
+            <View style={styles.syncHealthBar}>
+              <View style={styles.syncHealthTrack}>
+                <LinearGradient
+                  colors={
+                    syncHealth >= 80
+                      ? [theme.colors.neon.green, theme.colors.neon.cyan]
+                      : syncHealth >= 50
+                        ? [theme.colors.neon.yellow, theme.colors.neon.orange]
+                        : [theme.colors.neon.orange, theme.colors.neon.pink]
+                  }
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={[styles.syncHealthFill, { width: `${syncHealth}%` }]}
+                />
+              </View>
+              <AppText
+                variant="caption"
+                center
+                color={theme.colors.text.tertiary}
+              >
+                {syncHealth >= 80
+                  ? "Excellent"
+                  : syncHealth >= 50
+                    ? "Good"
+                    : "Poor"}{" "}
+                synchronization
+              </AppText>
             </View>
           </GlassCard>
 
           {/* Player Section */}
           <GlassCard intensity="heavy" style={styles.playerCard}>
-            {/* Album Art Placeholder */}
-            <LinearGradient
-              colors={theme.gradients.sunset}
-              start={{ x: 0, y: 0 }}
-              end={{ x: 1, y: 1 }}
-              style={styles.albumArt}
-            >
-              <Ionicons
-                name="musical-notes"
-                size={64}
-                color={theme.colors.white}
-              />
-            </LinearGradient>
+            {/* Now Playing Badge */}
+            {isPlaying && (
+              <View style={styles.nowPlayingBadge}>
+                <LinearGradient
+                  colors={theme.gradients.party}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 0 }}
+                  style={styles.nowPlayingGradient}
+                >
+                  <Ionicons name="radio" size={14} color={theme.colors.white} />
+                  <AppText
+                    variant="caption"
+                    weight="bold"
+                    style={styles.nowPlayingText}
+                  >
+                    NOW PLAYING
+                  </AppText>
+                </LinearGradient>
+              </View>
+            )}
+
+            {/* Album Art with Waveform Overlay */}
+            <View style={styles.albumArtContainer}>
+              <LinearGradient
+                colors={theme.gradients.sunset}
+                start={{ x: 0, y: 0 }}
+                end={{ x: 1, y: 1 }}
+                style={styles.albumArt}
+              >
+                <Ionicons
+                  name="disc"
+                  size={64}
+                  color={theme.colors.white}
+                  style={isPlaying ? styles.spinningIcon : undefined}
+                />
+              </LinearGradient>
+
+              {/* Animated Waveform */}
+              <View style={styles.waveformContainer}>
+                {waveAnims.map((anim, index) => (
+                  <Animated.View
+                    key={index}
+                    style={[
+                      styles.waveBar,
+                      {
+                        transform: [
+                          {
+                            scaleY: anim,
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                ))}
+              </View>
+            </View>
 
             {/* Track Info */}
             <View style={styles.trackInfo}>
               <AppText variant="h3" weight="bold" center>
-                {isPlaying ? "Now Playing" : "Ready to Play"}
+                {isPlaying ? "Summer Vibes Mix" : "Ready to Play"}
               </AppText>
               <AppText
                 variant="body"
                 color={theme.colors.text.secondary}
                 center
               >
-                {isPlaying ? "Summer Vibes Mix" : "Select a track to begin"}
+                {isPlaying
+                  ? "Various Artists • 2024"
+                  : "Select a track to begin"}
               </AppText>
             </View>
 
-            {/* Progress Bar */}
+            {/* Seek Slider with Progress */}
             <View style={styles.progressContainer}>
-              <View style={styles.progressBar}>
-                <LinearGradient
-                  colors={theme.gradients.primary}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 0 }}
-                  style={[styles.progressFill, { width: "35%" }]}
-                />
-              </View>
+              <Slider
+                style={styles.slider}
+                minimumValue={0}
+                maximumValue={1}
+                value={progress}
+                onValueChange={setProgress}
+                minimumTrackTintColor={theme.colors.neon.pink}
+                maximumTrackTintColor={theme.colors.glass.light}
+                thumbTintColor={theme.colors.neon.pink}
+              />
               <View style={styles.progressTime}>
-                <AppText variant="caption">1:24</AppText>
+                <AppText variant="caption">
+                  {Math.floor((progress * 242) / 60)}:
+                  {String(Math.floor((progress * 242) % 60)).padStart(2, "0")}
+                </AppText>
                 <AppText variant="caption">4:02</AppText>
               </View>
             </View>
@@ -207,6 +383,33 @@ export default function PlayerRoomScreen() {
                 onPress={() => console.log("Next")}
               />
             </View>
+
+            {/* Volume Slider */}
+            <View style={styles.volumeContainer}>
+              <Ionicons
+                name="volume-low"
+                size={20}
+                color={theme.colors.text.secondary}
+              />
+              <Slider
+                style={styles.volumeSlider}
+                minimumValue={0}
+                maximumValue={1}
+                value={volume}
+                onValueChange={setVolume}
+                minimumTrackTintColor={theme.colors.neon.purple}
+                maximumTrackTintColor={theme.colors.glass.light}
+                thumbTintColor={theme.colors.neon.purple}
+              />
+              <Ionicons
+                name="volume-high"
+                size={20}
+                color={theme.colors.text.secondary}
+              />
+              <AppText variant="caption" style={styles.volumeText}>
+                {Math.round(volume * 100)}%
+              </AppText>
+            </View>
           </GlassCard>
 
           {/* Actions */}
@@ -241,89 +444,152 @@ export default function PlayerRoomScreen() {
             />
           </View>
 
-          {/* Connected Users */}
+          {/* Connected Users - Device Grid */}
           <View style={styles.usersSection}>
-            <AppText variant="h4" style={styles.sectionTitle}>
-              Connected Users
-            </AppText>
-
-            <GlassCard intensity="medium" style={styles.userCard}>
-              <View style={styles.userRow}>
-                <View
-                  style={[
-                    styles.userAvatar,
-                    { backgroundColor: theme.colors.neon.pink },
-                  ]}
-                >
-                  <AppText variant="body" weight="bold">
-                    YO
-                  </AppText>
-                </View>
-                <View style={styles.userInfo}>
-                  <AppText variant="body" weight="semibold">
-                    You {isHost && "(Host)"}
-                  </AppText>
-                  <AppText variant="caption">iPhone 15 Pro</AppText>
-                </View>
+            <View style={styles.sectionHeaderRow}>
+              <View style={styles.sectionHeaderLeft}>
                 <Ionicons
-                  name="checkmark-circle"
-                  size={24}
-                  color={theme.colors.neon.green}
+                  name="grid"
+                  size={20}
+                  color={theme.colors.neon.cyan}
                 />
+                <AppText variant="h4" weight="bold">
+                  Device Grid
+                </AppText>
               </View>
-            </GlassCard>
+              <View style={styles.deviceCountBadge}>
+                <AppText variant="caption" weight="bold">
+                  {connectedDevices} / 8
+                </AppText>
+              </View>
+            </View>
 
-            <GlassCard intensity="medium" style={styles.userCard}>
-              <View style={styles.userRow}>
-                <View
-                  style={[
-                    styles.userAvatar,
-                    { backgroundColor: theme.colors.neon.cyan },
-                  ]}
-                >
-                  <AppText variant="body" weight="bold">
-                    JD
+            <View style={styles.deviceGrid}>
+              <GlassCard intensity="medium" style={styles.deviceCard}>
+                <LinearGradient
+                  colors={[...theme.gradients.party, "transparent"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.deviceGradient}
+                />
+                <View style={styles.deviceContent}>
+                  <View
+                    style={[
+                      styles.deviceAvatar,
+                      { backgroundColor: theme.colors.neon.pink },
+                    ]}
+                  >
+                    <AppText variant="body" weight="bold">
+                      YO
+                    </AppText>
+                  </View>
+                  <AppText variant="body" weight="semibold" numberOfLines={1}>
+                    You {isHost && "👑"}
                   </AppText>
+                  <AppText variant="caption" numberOfLines={1}>
+                    iPhone 15 Pro
+                  </AppText>
+                  <View style={styles.deviceStatus}>
+                    <View style={[styles.statusDot, styles.statusOnline]} />
+                    <AppText variant="caption" style={styles.statusText}>
+                      Online
+                    </AppText>
+                  </View>
                 </View>
-                <View style={styles.userInfo}>
-                  <AppText variant="body" weight="semibold">
+              </GlassCard>
+
+              <GlassCard intensity="medium" style={styles.deviceCard}>
+                <LinearGradient
+                  colors={[...theme.gradients.sunset, "transparent"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.deviceGradient}
+                />
+                <View style={styles.deviceContent}>
+                  <View
+                    style={[
+                      styles.deviceAvatar,
+                      { backgroundColor: theme.colors.neon.cyan },
+                    ]}
+                  >
+                    <AppText variant="body" weight="bold">
+                      JD
+                    </AppText>
+                  </View>
+                  <AppText variant="body" weight="semibold" numberOfLines={1}>
                     John Doe
                   </AppText>
-                  <AppText variant="caption">Samsung Galaxy S23</AppText>
-                </View>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={24}
-                  color={theme.colors.neon.green}
-                />
-              </View>
-            </GlassCard>
-
-            <GlassCard intensity="medium" style={styles.userCard}>
-              <View style={styles.userRow}>
-                <View
-                  style={[
-                    styles.userAvatar,
-                    { backgroundColor: theme.colors.neon.purple },
-                  ]}
-                >
-                  <AppText variant="body" weight="bold">
-                    AS
+                  <AppText variant="caption" numberOfLines={1}>
+                    Galaxy S23
                   </AppText>
+                  <View style={styles.deviceStatus}>
+                    <View style={[styles.statusDot, styles.statusOnline]} />
+                    <AppText variant="caption" style={styles.statusText}>
+                      Online
+                    </AppText>
+                  </View>
                 </View>
-                <View style={styles.userInfo}>
-                  <AppText variant="body" weight="semibold">
+              </GlassCard>
+
+              <GlassCard intensity="medium" style={styles.deviceCard}>
+                <LinearGradient
+                  colors={[...theme.gradients.lime, "transparent"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.deviceGradient}
+                />
+                <View style={styles.deviceContent}>
+                  <View
+                    style={[
+                      styles.deviceAvatar,
+                      { backgroundColor: theme.colors.neon.purple },
+                    ]}
+                  >
+                    <AppText variant="body" weight="bold">
+                      AS
+                    </AppText>
+                  </View>
+                  <AppText variant="body" weight="semibold" numberOfLines={1}>
                     Alex Smith
                   </AppText>
-                  <AppText variant="caption">iPad Pro</AppText>
+                  <AppText variant="caption" numberOfLines={1}>
+                    iPad Pro
+                  </AppText>
+                  <View style={styles.deviceStatus}>
+                    <View style={[styles.statusDot, styles.statusOnline]} />
+                    <AppText variant="caption" style={styles.statusText}>
+                      Online
+                    </AppText>
+                  </View>
                 </View>
-                <Ionicons
-                  name="checkmark-circle"
-                  size={24}
-                  color={theme.colors.neon.green}
-                />
-              </View>
-            </GlassCard>
+              </GlassCard>
+
+              {/* Empty slots */}
+              {Array.from({ length: 5 }).map((_, index) => (
+                <GlassCard
+                  key={`empty-${index}`}
+                  intensity="light"
+                  style={styles.deviceCard}
+                >
+                  <View style={styles.deviceContent}>
+                    <View style={styles.emptySlot}>
+                      <Ionicons
+                        name="add-circle-outline"
+                        size={32}
+                        color={theme.colors.text.tertiary}
+                      />
+                    </View>
+                    <AppText
+                      variant="caption"
+                      color={theme.colors.text.tertiary}
+                      center
+                    >
+                      Empty Slot
+                    </AppText>
+                  </View>
+                </GlassCard>
+              ))}
+            </View>
           </View>
         </ScrollView>
       </LinearGradient>
@@ -335,9 +601,26 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
+  colorEffect: {
+    position: "absolute",
+    width: "100%",
+    height: "50%",
+    zIndex: 0,
+  },
+  colorEffectTop: {
+    top: 0,
+  },
+  colorEffectBottom: {
+    bottom: 0,
+  },
+  colorGradient: {
+    width: "100%",
+    height: "100%",
+  },
   scrollContent: {
     padding: theme.spacing.lg,
     paddingTop: theme.spacing["2xl"],
+    zIndex: 1,
   },
   header: {
     marginBottom: theme.spacing.xl,
@@ -365,6 +648,7 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: "row",
     justifyContent: "space-around",
+    marginBottom: theme.spacing.md,
   },
   infoItem: {
     alignItems: "center",
@@ -374,10 +658,46 @@ const styles = StyleSheet.create({
     width: 1,
     backgroundColor: theme.colors.glass.light,
   },
+  syncHealthBar: {
+    gap: theme.spacing.sm,
+  },
+  syncHealthTrack: {
+    height: 6,
+    backgroundColor: theme.colors.glass.light,
+    borderRadius: 3,
+    overflow: "hidden",
+  },
+  syncHealthFill: {
+    height: "100%",
+  },
   playerCard: {
     alignItems: "center",
     marginBottom: theme.spacing.xl,
     gap: theme.spacing.lg,
+    overflow: "hidden",
+  },
+  nowPlayingBadge: {
+    position: "absolute",
+    top: theme.spacing.md,
+    right: theme.spacing.md,
+    borderRadius: theme.borderRadius.full,
+    overflow: "hidden",
+    zIndex: 10,
+  },
+  nowPlayingGradient: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+  },
+  nowPlayingText: {
+    color: theme.colors.white,
+    fontSize: 11,
+  },
+  albumArtContainer: {
+    position: "relative",
+    alignItems: "center",
   },
   albumArt: {
     width: 200,
@@ -387,6 +707,23 @@ const styles = StyleSheet.create({
     alignItems: "center",
     ...theme.shadows.xl,
   },
+  spinningIcon: {
+    // Add rotation animation in useEffect if needed
+  },
+  waveformContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: 4,
+    height: 60,
+    marginTop: theme.spacing.md,
+  },
+  waveBar: {
+    width: 4,
+    height: 60,
+    backgroundColor: theme.colors.neon.cyan,
+    borderRadius: 2,
+  },
   trackInfo: {
     gap: theme.spacing.xs,
     width: "100%",
@@ -395,14 +732,9 @@ const styles = StyleSheet.create({
     width: "100%",
     gap: theme.spacing.sm,
   },
-  progressBar: {
-    height: 4,
-    backgroundColor: theme.colors.glass.light,
-    borderRadius: 2,
-    overflow: "hidden",
-  },
-  progressFill: {
-    height: "100%",
+  slider: {
+    width: "100%",
+    height: 40,
   },
   progressTime: {
     flexDirection: "row",
@@ -413,6 +745,20 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: theme.spacing.xl,
   },
+  volumeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    width: "100%",
+  },
+  volumeSlider: {
+    flex: 1,
+    height: 40,
+  },
+  volumeText: {
+    minWidth: 40,
+    textAlign: "right",
+  },
   actions: {
     gap: theme.spacing.md,
     marginBottom: theme.spacing.xl,
@@ -420,26 +766,77 @@ const styles = StyleSheet.create({
   usersSection: {
     marginBottom: theme.spacing.xl,
   },
-  sectionTitle: {
+  sectionHeaderRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: theme.spacing.md,
   },
-  userCard: {
-    marginBottom: theme.spacing.sm,
-  },
-  userRow: {
+  sectionHeaderLeft: {
     flexDirection: "row",
     alignItems: "center",
+    gap: theme.spacing.sm,
+  },
+  deviceCountBadge: {
+    backgroundColor: theme.colors.glass.medium,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+  },
+  deviceGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
     gap: theme.spacing.md,
   },
-  userAvatar: {
+  deviceCard: {
+    width: "47%",
+    overflow: "hidden",
+  },
+  deviceGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.08,
+  },
+  deviceContent: {
+    alignItems: "center",
+    gap: theme.spacing.xs,
+    paddingVertical: theme.spacing.sm,
+  },
+  deviceAvatar: {
     width: 48,
     height: 48,
     borderRadius: theme.borderRadius.full,
     justifyContent: "center",
     alignItems: "center",
+    marginBottom: theme.spacing.xs,
   },
-  userInfo: {
-    flex: 1,
+  deviceStatus: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing.xs,
+    marginTop: theme.spacing.xs,
+  },
+  statusDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+  },
+  statusOnline: {
+    backgroundColor: theme.colors.neon.green,
+  },
+  statusText: {
+    fontSize: 11,
+  },
+  emptySlot: {
+    width: 48,
+    height: 48,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.glass.light,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: theme.spacing.xs,
   },
 });
