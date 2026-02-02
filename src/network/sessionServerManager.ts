@@ -1,7 +1,7 @@
 /**
  * Session Server Manager
  * High-level API for managing WebSocket session server
- * 
+ *
  * Responsibilities:
  * - Create/destroy server
  * - Accept/reject clients based on validation rules
@@ -11,8 +11,8 @@
  * - Integrate with Zustand state
  */
 
-import { sessionRegistry } from "./sessionRegistry";
 import type { ClientInfo, MemberInfo } from "./protocol";
+import { sessionRegistry } from "./sessionRegistry";
 import { WebSocketServer, type ServerOptions } from "./websocketServer";
 
 /**
@@ -149,7 +149,7 @@ export class SessionServerManager {
   /**
    * Accept client connection
    * Returns true if accepted, false if rejected
-   * 
+   *
    * Validation checks:
    * 1. Session exists
    * 2. Session code valid
@@ -210,10 +210,7 @@ export class SessionServerManager {
       return false;
     }
 
-    const success = sessionRegistry.addMember(
-      this.options.sessionId,
-      deviceId,
-    );
+    const success = sessionRegistry.addMember(this.options.sessionId, deviceId);
 
     if (success) {
       console.log(
@@ -257,7 +254,9 @@ export class SessionServerManager {
       return;
     }
 
-    console.log(`[SessionServerManager] Kicking member: ${deviceId} - ${reason}`);
+    console.log(
+      `[SessionServerManager] Kicking member: ${deviceId} - ${reason}`,
+    );
 
     this.server.kickClient(deviceId, reason);
     this.removeMember(deviceId, reason);

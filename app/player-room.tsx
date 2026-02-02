@@ -1,10 +1,11 @@
 import { Ionicons } from "@expo/vector-icons";
 import Slider from "@react-native-community/slider";
 import { LinearGradient } from "expo-linear-gradient";
-import { useLocalSearchParams, useRouter } from "expo-router";
+import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
 import {
+  ActivityIndicator,
   Alert,
   Pressable,
   ScrollView,
@@ -29,12 +30,12 @@ import {
   GradientButton,
   IconButton,
 } from "../src/components";
-import { HostBroadcastService } from "../src/network/hostBroadcast";
 import {
   useCurrentSession,
   useIsHost,
-  useLoudSyncStore,
   useMembers,
+  useSessionActions,
+  useSessionStatus,
 } from "../src/state";
 import { theme } from "../src/theme";
 
@@ -42,23 +43,18 @@ const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
 
 export default function PlayerRoomScreen() {
   const router = useRouter();
-  const params = useLocalSearchParams<{
-    sessionId: string;
-    sessionName: string;
-    isHost: string;
-  }>();
 
-  // State integration
+  // Zustand state - single source of truth
   const session = useCurrentSession();
   const members = useMembers();
   const isHost = useIsHost();
-  const { leaveSession, stopHosting } = useLoudSyncStore();
+  const sessionStatus = useSessionStatus();
+  const { leaveSession, stopHosting } = useSessionActions();
 
   // Local state
   const [isPlaying, setIsPlaying] = React.useState(false);
   const [volume, setVolume] = React.useState(0.75);
   const [progress, setProgress] = React.useState(0.35);
-  const [broadcastService] = React.useState(() => new HostBroadcastService());
 
   // Derived state
   const connectedDevices = members.length;
@@ -81,50 +77,13 @@ export default function PlayerRoomScreen() {
   // Party color pulse
   const colorPulse = useSharedValue(0);
 
-  // Initialize host broadcast when entering as host
+  // Redirect if no session
   useEffect(() => {
-    const initializeBroadcast = async () => {
-      if (params.isHost === "true" && params.sessionId) {
-        console.log(
-          `🎙️ Starting host broadcast for session: ${params.sessionId}`,
-        );
-
-        try {
-          // Get local IP (placeholder - in production use actual network info)
-          const localIP = "192.168.1.100"; // TODO: Get actual local IP
-
-          // Start broadcasting
-          await broadcastService.startBroadcast(
-            {
-              sessionId: params.sessionId,
-              sessionName: params.sessionName || "Party Room",
-              hostId: `host-${Date.now()}`,
-              hostName: "Party Host",
-              memberCount: connectedDevices,
-              maxMembers: 8,
-              isPasswordProtected: false,
-              version: "1.0.0",
-            },
-            localIP,
-          );
-
-          console.log(`✅ Host broadcast started successfully`);
-        } catch (error) {
-          console.error("Failed to start host broadcast:", error);
-        }
-      }
-    };
-
-    initializeBroadcast();
-
-    // Cleanup on unmount
-    return () => {
-      if (params.isHost === "true") {
-        console.log("🛑 Stopping host broadcast");
-        broadcastService.stopBroadcast();
-      }
-    };
-  }, [params.isHost, params.sessionId]);
+    if (!session && sessionStatus === "idle") {
+      console.log("[PlayerRoom] No active session, redirecting to home");
+      router.replace("/home");
+    }
+  }, [session, sessionStatus]);
 
   useEffect(() => {
     // Start glow pulse
@@ -195,12 +154,28 @@ export default function PlayerRoomScreen() {
           text: isHost ? "End Session" : "Leave",
           style: "destructive",
           onPress: async () => {
-            if (isHost) {
-              await stopHosting();
-            } else {
-              leaveSession();
+            console.log(
+              `[PlayerRoom] ${isHost ? "Ending" : "Leaving"} session...`,
+            );
+
+            try {
+              if (isHost) {
+                await stopHosting();
+              } else {
+                leaveSession();
+              }
+
+              console.log("[PlayerRoom] ✅ Successfully left/ended session");
+              router.replace("/home");
+            } catch (error) {
+              console.error("[PlayerRoom] Failed to leave:", error);
+              Alert.alert(
+                "Error",
+                error instanceof Error
+                  ? error.message
+                  : "Failed to leave session",
+              );
             }
-            router.replace("/home");
           },
         },
       ],
@@ -295,8 +270,59 @@ export default function PlayerRoomScreen() {
             </View>
 
             <AppText variant="h2" weight="bold" center>
-              {session?.name || params.sessionName}
+              {session?.name || "Party Room"}
             </AppText>
+
+            {/* Connection Status Badge */}
+            <View style={styles.statusBadgeContainer}>
+              {sessionStatus === "hosting" && (
+                <View style={[styles.statusBadge, styles.hostingBadge]}>
+                  <Ionicons
+                    name="radio"
+                    size={14}
+                    color={theme.colors.neon.green}
+                  />
+                  <AppText
+                    variant="caption"
+                    weight="bold"
+                    color={theme.colors.neon.green}
+                  >
+                    Hosting
+                  </AppText>
+                </View>
+              )}
+              {sessionStatus === "connected" && (
+                <View style={[styles.statusBadge, styles.connectedBadge]}>
+                  <Ionicons
+                    name="checkmark-circle"
+                    size={14}
+                    color={theme.colors.neon.cyan}
+                  />
+                  <AppText
+                    variant="caption"
+                    weight="bold"
+                    color={theme.colors.neon.cyan}
+                  >
+                    Connected
+                  </AppText>
+                </View>
+              )}
+              {sessionStatus === "joining" && (
+                <View style={[styles.statusBadge, styles.joiningBadge]}>
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.neon.yellow}
+                  />
+                  <AppText
+                    variant="caption"
+                    weight="bold"
+                    color={theme.colors.neon.yellow}
+                  >
+                    Joining...
+                  </AppText>
+                </View>
+              )}
+            </View>
 
             <View style={styles.sessionCodeContainer}>
               <AppText variant="body" color={theme.colors.text.secondary}>
@@ -309,7 +335,7 @@ export default function PlayerRoomScreen() {
                     weight="bold"
                     color={theme.colors.neon.cyan}
                   >
-                    {session?.id || params.sessionId}
+                    {session?.id || "N/A"}
                   </AppText>
                   <Ionicons
                     name="share-outline"
@@ -630,9 +656,9 @@ export default function PlayerRoomScreen() {
             </View>
 
             <View style={styles.deviceGrid}>
-              {members.map((member) => (
+              {members.map((member, index) => (
                 <GlassCard
-                  key={member.id}
+                  key={member?.id || `member-${index}`}
                   intensity="medium"
                   style={styles.deviceCard}
                 >
@@ -780,6 +806,33 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.xs,
     borderRadius: theme.borderRadius.full,
+    borderWidth: 1,
+    borderColor: theme.colors.neon.yellow,
+  },
+  statusBadgeContainer: {
+    marginTop: theme.spacing.sm,
+    alignItems: "center",
+  },
+  statusBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+  },
+  hostingBadge: {
+    backgroundColor: "rgba(0, 255, 0, 0.15)",
+    borderWidth: 1,
+    borderColor: theme.colors.neon.green,
+  },
+  connectedBadge: {
+    backgroundColor: "rgba(0, 255, 255, 0.15)",
+    borderWidth: 1,
+    borderColor: theme.colors.neon.cyan,
+  },
+  joiningBadge: {
+    backgroundColor: "rgba(255, 214, 0, 0.15)",
     borderWidth: 1,
     borderColor: theme.colors.neon.yellow,
   },

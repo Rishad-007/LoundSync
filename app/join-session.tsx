@@ -4,6 +4,7 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import {
+  ActivityIndicator,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -28,6 +29,12 @@ import {
 } from "../src/components";
 import { discoveryManager, sessionRegistry } from "../src/network";
 import type { DiscoveredSessionData } from "../src/network/types";
+import {
+  useDiscoveredSessions,
+  useSessionActions,
+  useSessionError,
+  useSessionStatus,
+} from "../src/state";
 import { theme } from "../src/theme";
 
 const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
@@ -48,11 +55,21 @@ const formatSessionCode = (text: string): string => {
 
 export default function JoinSessionScreen() {
   const router = useRouter();
+
+  // Zustand state
+  const { discoverSessions, stopDiscovery, joinSession } = useSessionActions();
+  const discoveredSessionsFromStore = useDiscoveredSessions();
+  const sessionStatus = useSessionStatus();
+  const sessionError = useSessionError();
+
+  // Local state
   const [sessionCode, setSessionCode] = useState("");
   const [isScanning, setIsScanning] = useState(true);
   const [discoveredSessions, setDiscoveredSessions] = useState<
     DiscoveredSessionData[]
   >([]);
+  const [isJoining, setIsJoining] = useState(false);
+  const [joiningSessionId, setJoiningSessionId] = useState<string | null>(null);
   const radarRotation = useRef(new RNAnimated.Value(0)).current;
   const pulseAnim = useRef(new RNAnimated.Value(0)).current;
 
@@ -82,19 +99,19 @@ export default function JoinSessionScreen() {
       ]),
     ).start();
 
-    // Start Discovery
+    // Start Discovery using Zustand
     const initDiscovery = async () => {
       try {
-        await discoveryManager.startDiscovery();
-        setDiscoveredSessions(discoveryManager.getDiscoveredSessions());
+        console.log("[JoinSession] Starting discovery...");
+        await discoverSessions();
       } catch (error) {
-        console.warn("Discovery start failed:", error);
+        console.warn("[JoinSession] Discovery start failed:", error);
       }
     };
 
     initDiscovery();
 
-    // Subscribe to updates
+    // Also subscribe to low-level discovery manager for UI updates
     const unsubscribe = discoveryManager.subscribe(
       () => setDiscoveredSessions(discoveryManager.getDiscoveredSessions()),
       () => setDiscoveredSessions(discoveryManager.getDiscoveredSessions()),
@@ -106,7 +123,7 @@ export default function JoinSessionScreen() {
     return () => {
       clearTimeout(timer);
       unsubscribe();
-      discoveryManager.stopDiscovery();
+      stopDiscovery();
     };
   }, []);
 
@@ -131,61 +148,81 @@ export default function JoinSessionScreen() {
     opacity: pulseOpacity,
   };
 
-  const handleJoinSession = (session?: DiscoveredSessionData) => {
-    if (session) {
-      // Joining via discovered session (mDNS/UDP scan)
-      router.push({
-        pathname: "/player-room",
-        params: {
-          sessionId: session.advertisement.sessionId,
-          sessionName: session.advertisement.sessionName,
-          isHost: "false",
-        },
-      });
-      return;
-    }
+  const handleJoinSession = async (session?: DiscoveredSessionData) => {
+    try {
+      setIsJoining(true);
 
-    // Joining via manual code entry
-    if (!sessionCode.trim() || sessionCode.length < 7) {
-      Alert.alert(
-        "Invalid Code",
-        "Please enter a valid 6-character session code in format XXX-XXX",
+      let sessionIdToJoin: string;
+
+      if (session) {
+        // Joining via discovered session (mDNS/UDP scan)
+        sessionIdToJoin = session.advertisement.sessionId;
+        console.log(
+          "[JoinSession] Joining discovered session:",
+          session.advertisement.sessionName,
+        );
+      } else {
+        // Joining via manual code entry
+        if (!sessionCode.trim() || sessionCode.length < 7) {
+          Alert.alert(
+            "Invalid Code",
+            "Please enter a valid 6-character session code in format XXX-XXX",
+          );
+          setIsJoining(false);
+          return;
+        }
+
+        // Strip dashes and validate format
+        const cleanId = sessionCode.replace(/[^A-Z0-9]/g, "");
+
+        if (cleanId.length !== 6) {
+          Alert.alert(
+            "Invalid Code",
+            "Session code must be exactly 6 characters (XXX-XXX)",
+          );
+          setIsJoining(false);
+          return;
+        }
+
+        // Validate session code exists and is active
+        const validation = sessionRegistry.validateSessionCode(cleanId);
+
+        if (!validation.valid) {
+          Alert.alert(
+            "Cannot Join Session",
+            validation.reason ||
+              "The session code you entered is invalid or no longer active.",
+          );
+          setIsJoining(false);
+          return;
+        }
+
+        sessionIdToJoin = validation.sessionId!;
+        console.log("[JoinSession] Joining via code:", sessionCode);
+      }
+
+      setJoiningSessionId(sessionIdToJoin);
+
+      // Join session via Zustand
+      await joinSession(sessionIdToJoin);
+
+      console.log(
+        "[JoinSession] ✅ Successfully joined, navigating to player room",
       );
-      return;
-    }
 
-    // Strip dashes and validate format
-    const cleanId = sessionCode.replace(/[^A-Z0-9]/g, "");
+      // Navigate to player room
+      router.push("/player-room");
+    } catch (error) {
+      console.error("[JoinSession] Failed to join:", error);
+      setIsJoining(false);
+      setJoiningSessionId(null);
 
-    if (cleanId.length !== 6) {
       Alert.alert(
-        "Invalid Code",
-        "Session code must be exactly 6 characters (XXX-XXX)",
+        "Failed to Join Session",
+        error instanceof Error ? error.message : "Unknown error",
+        [{ text: "OK" }],
       );
-      return;
     }
-
-    // Validate session code exists and is active
-    const validation = sessionRegistry.validateSessionCode(cleanId);
-
-    if (!validation.valid) {
-      Alert.alert(
-        "Cannot Join Session",
-        validation.reason ||
-          "The session code you entered is invalid or no longer active.",
-      );
-      return;
-    }
-
-    // Navigate to player room as guest with validated session
-    router.push({
-      pathname: "/player-room",
-      params: {
-        sessionId: validation.sessionId!,
-        sessionName: validation.sessionName || "Party Room",
-        isHost: "false",
-      },
-    });
   };
 
   return (
@@ -384,9 +421,16 @@ export default function JoinSessionScreen() {
                             </View>
                           </View>
                           <GradientButton
-                            title="Join"
+                            title={
+                              isJoining &&
+                              joiningSessionId ===
+                                session.advertisement.sessionId
+                                ? "Joining..."
+                                : "Join"
+                            }
                             gradient="secondary"
                             size="sm"
+                            disabled={isJoining}
                             onPress={() => handleJoinSession(session)}
                           />
                         </View>
@@ -466,18 +510,60 @@ export default function JoinSessionScreen() {
               </GlassCard>
             </Animated.View>
 
+            {/* Status Indicator */}
+            {isJoining && (
+              <Animated.View entering={FadeInUp.duration(400)}>
+                <GlassCard intensity="medium" style={styles.statusCard}>
+                  <View style={styles.statusContent}>
+                    <ActivityIndicator
+                      size="small"
+                      color={theme.colors.neon.cyan}
+                    />
+                    <AppText variant="body" weight="semibold">
+                      {sessionStatus === "joining" && "Connecting to host..."}
+                      {sessionStatus === "connected" && "Joining session..."}
+                    </AppText>
+                  </View>
+                </GlassCard>
+              </Animated.View>
+            )}
+
+            {/* Error Display */}
+            {sessionError && !isJoining && (
+              <Animated.View entering={FadeInUp.duration(400)}>
+                <GlassCard intensity="medium" style={styles.errorCard}>
+                  <View style={styles.statusContent}>
+                    <Ionicons
+                      name="alert-circle"
+                      size={24}
+                      color={theme.colors.error}
+                    />
+                    <AppText variant="body" color={theme.colors.error}>
+                      {sessionError}
+                    </AppText>
+                  </View>
+                </GlassCard>
+              </Animated.View>
+            )}
+
             {/* Join Button */}
             <Animated.View
               entering={FadeInUp.delay(500).duration(600).springify()}
               style={styles.actions}
             >
               <GradientButton
-                title="Join Session"
+                title={isJoining ? "Joining..." : "Join Session"}
                 gradient="secondary"
                 size="lg"
                 fullWidth
-                disabled={sessionCode.length < 7}
-                icon={<Ionicons name="enter" size={24} color="white" />}
+                disabled={sessionCode.length < 7 || isJoining}
+                icon={
+                  isJoining ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Ionicons name="enter" size={24} color="white" />
+                  )
+                }
                 onPress={() => handleJoinSession()}
               />
             </Animated.View>
@@ -675,6 +761,19 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     gap: theme.spacing.xs,
+  },
+  statusCard: {
+    marginBottom: theme.spacing.md,
+    backgroundColor: "rgba(0, 255, 255, 0.1)",
+  },
+  errorCard: {
+    marginBottom: theme.spacing.md,
+    backgroundColor: "rgba(255, 59, 48, 0.1)",
+  },
+  statusContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
   },
   actions: {
     marginBottom: theme.spacing.xl,

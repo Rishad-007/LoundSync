@@ -115,14 +115,23 @@ export class HostBroadcastService {
     interval: number,
   ): void {
     try {
+      // Check if UDP module is available and has createSocket
       if (!UDP) {
         console.warn("[HostBroadcast] UDP module not available");
         return;
       }
 
-      this.udpSocket = UDP.createSocket({
-        type: "udp4",
-      });
+      try {
+        this.udpSocket = UDP.createSocket({
+          type: "udp4",
+        });
+      } catch (socketError) {
+        console.warn(
+          "[HostBroadcast] Failed to create UDP socket (likely running in restricted environment):",
+          socketError,
+        );
+        return;
+      }
 
       // Listen for discovery requests
       this.udpSocket.on("message", (msg: Buffer, rinfo: any) => {

@@ -12,9 +12,9 @@ export * from "./protocol";
 export { sessionRegistry } from "./sessionRegistry";
 export { sessionServerManager } from "./sessionServerManager";
 export type {
-  SessionServerManager,
   CreateServerOptions,
   SessionServerCallbacks,
+  SessionServerManager,
 } from "./sessionServerManager";
 export { simulatedDiscovery } from "./simulatedDiscovery";
 export type { SimulatedDiscoveryService } from "./simulatedDiscovery";

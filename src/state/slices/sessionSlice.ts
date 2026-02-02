@@ -8,6 +8,7 @@ import { StateCreator } from "zustand";
 import {
   discoveryManager,
   hostBroadcastService,
+  sessionRegistry,
   sessionServerManager,
 } from "../../network";
 import type { MemberInfo } from "../../network/protocol";
@@ -90,11 +91,21 @@ export const createSessionSlice: StateCreator<
    */
   createSession: async (name: string) => {
     try {
-      const localDevice = get().localDevice;
+      let localDevice = get().localDevice;
+
+      // Auto-generate device if not set (fallback for development)
       if (!localDevice) {
-        throw new Error(
-          "No local device set. Please complete onboarding first.",
+        console.warn(
+          "[SessionSlice] No local device found, auto-generating...",
         );
+        get().generateDeviceId();
+        localDevice = get().localDevice;
+
+        if (!localDevice) {
+          throw new Error("Failed to generate device ID");
+        }
+
+        console.log("[SessionSlice] Auto-generated device:", localDevice.id);
       }
 
       console.log("[SessionSlice] Creating session:", name);
@@ -111,6 +122,21 @@ export const createSessionSlice: StateCreator<
         isPasswordProtected: false,
         version: "1.0.0",
       };
+
+      // Register session in registry (required before starting server)
+      sessionRegistry.registerSession({
+        sessionId: session.id,
+        sessionCode: session.id
+          .replace("session_", "")
+          .substring(0, 6)
+          .toUpperCase(), // Temp code from ID
+        sessionName: session.name,
+        hostId: localDevice.id,
+        hostName: localDevice.name,
+        maxMembers: session.maxMembers,
+      });
+
+      console.log("[SessionSlice] Session registered in registry:", session.id);
 
       set({
         currentSession: session,
@@ -367,9 +393,21 @@ export const createSessionSlice: StateCreator<
    */
   joinSession: async (sessionId: string) => {
     try {
-      const localDevice = get().localDevice;
+      let localDevice = get().localDevice;
+
+      // Auto-generate device if not set (fallback for development)
       if (!localDevice) {
-        throw new Error("No local device set");
+        console.warn(
+          "[SessionSlice] No local device found, auto-generating...",
+        );
+        get().generateDeviceId();
+        localDevice = get().localDevice;
+
+        if (!localDevice) {
+          throw new Error("Failed to generate device ID");
+        }
+
+        console.log("[SessionSlice] Auto-generated device:", localDevice.id);
       }
 
       const discovered = get().discoveredSessions.find(

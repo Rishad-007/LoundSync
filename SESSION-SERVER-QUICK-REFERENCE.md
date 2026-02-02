@@ -5,6 +5,7 @@
 ### Core Classes
 
 #### 1. SessionServerManager
+
 **Location:** `src/network/sessionServerManager.ts`  
 **Purpose:** High-level session management API
 
@@ -38,6 +39,7 @@ await sessionServerManager.stopServer();
 ```
 
 #### 2. WebSocketServer
+
 **Location:** `src/network/websocketServer.ts`  
 **Purpose:** Low-level WebSocket server (used internally by SessionServerManager)
 
@@ -59,6 +61,7 @@ await server.stop();
 ```
 
 #### 3. SessionRegistry
+
 **Location:** `src/network/sessionRegistry.ts`  
 **Purpose:** In-memory session database
 
@@ -96,9 +99,11 @@ const sessions = sessionRegistry.getAllActiveSessions();
 ### SessionServerManager Methods
 
 #### `createServer(options: CreateServerOptions): Promise<void>`
+
 Start WebSocket server for session.
 
 **Parameters:**
+
 ```typescript
 {
   sessionId: string;        // Session ID (e.g., "A1B2C3")
@@ -116,10 +121,12 @@ Start WebSocket server for session.
 ---
 
 #### `stopServer(): Promise<void>`
+
 Stop server and disconnect all clients.
 
 **Returns:** `Promise<void>`  
 **Effects:**
+
 - Sends SESSION_CLOSED to all clients
 - Closes all connections
 - Stops heartbeat monitoring
@@ -128,9 +135,11 @@ Stop server and disconnect all clients.
 ---
 
 #### `acceptClient(deviceId: string, deviceName: string): boolean`
+
 Validate if client should be accepted.
 
 **Validation Checks:**
+
 1. ✅ Session exists in registry
 2. ✅ Not a duplicate connection
 3. ✅ Session not full
@@ -140,6 +149,7 @@ Validate if client should be accepted.
 ---
 
 #### `registerMember(deviceId: string, deviceName: string): boolean`
+
 Add member to session registry.
 
 **Returns:** `true` if successful, `false` if failed
@@ -147,22 +157,27 @@ Add member to session registry.
 ---
 
 #### `removeMember(deviceId: string, reason?: string): void`
+
 Remove member from session.
 
 **Parameters:**
+
 - `deviceId`: Member to remove
 - `reason`: Optional disconnect reason
 
 ---
 
 #### `kickMember(deviceId: string, reason: string): void`
+
 Force disconnect a member.
 
 **Parameters:**
+
 - `deviceId`: Member to kick
 - `reason`: Kick reason (shown to user)
 
 **Effects:**
+
 - Sends KICKED message to client
 - Closes connection
 - Broadcasts MEMBER_LEFT to others
@@ -170,14 +185,17 @@ Force disconnect a member.
 ---
 
 #### `broadcastMembers(): void`
+
 Manually trigger member list broadcast (usually automatic).
 
 ---
 
 #### `getMembers(): MemberInfo[]`
+
 Get current member list.
 
 **Returns:**
+
 ```typescript
 [
   {
@@ -188,7 +206,7 @@ Get current member list.
     joinedAt: 1738454400000,
     lastSeen: 1738454400000,
     address: "192.168.1.100",
-    latency: null
+    latency: null,
   },
   {
     id: "device-456",
@@ -198,27 +216,31 @@ Get current member list.
     joinedAt: 1738454500000,
     lastSeen: 1738454500000,
     address: "192.168.1.101",
-    latency: 45
-  }
-]
+    latency: 45,
+  },
+];
 ```
 
 ---
 
 #### `getMemberCount(): number`
+
 Get current member count (including host).
 
 ---
 
 #### `isRunning(): boolean`
+
 Check if server is active.
 
 ---
 
 #### `setCallbacks(callbacks: SessionServerCallbacks): void`
+
 Set event handlers.
 
 **Parameters:**
+
 ```typescript
 {
   onMemberJoined?: (member: MemberInfo) => void;
@@ -250,7 +272,7 @@ startHosting: async () => {
     maxMembers: 8,
     port: 8080,
   });
-  
+
   // 2. Set callbacks
   sessionServerManager.setCallbacks({
     onMemberJoined: (member) => {
@@ -281,7 +303,7 @@ startHosting: async () => {
       set({ error: error.message });
     },
   });
-  
+
   // 3. Update state
   set({
     status: "hosting",
@@ -293,7 +315,7 @@ startHosting: async () => {
 // Stop hosting
 stopHosting: async () => {
   await sessionServerManager.stopServer();
-  
+
   set({
     status: "idle",
     role: null,
@@ -308,6 +330,7 @@ stopHosting: async () => {
 ## Message Protocol
 
 ### JOIN (Guest → Host)
+
 ```json
 {
   "type": "JOIN",
@@ -322,6 +345,7 @@ stopHosting: async () => {
 ```
 
 ### WELCOME (Host → Guest)
+
 ```json
 {
   "type": "WELCOME",
@@ -337,6 +361,7 @@ stopHosting: async () => {
 ```
 
 ### MEMBER_LIST (Host → Guest)
+
 ```json
 {
   "type": "MEMBER_LIST",
@@ -351,6 +376,7 @@ stopHosting: async () => {
 ```
 
 ### MEMBER_JOINED (Host → All)
+
 ```json
 {
   "type": "MEMBER_JOINED",
@@ -368,6 +394,7 @@ stopHosting: async () => {
 ```
 
 ### MEMBER_LEFT (Host → All)
+
 ```json
 {
   "type": "MEMBER_LEFT",
@@ -380,6 +407,7 @@ stopHosting: async () => {
 ```
 
 ### ERROR (Host → Guest)
+
 ```json
 {
   "type": "ERROR",
@@ -392,6 +420,7 @@ stopHosting: async () => {
 ```
 
 ### SESSION_CLOSED (Host → All)
+
 ```json
 {
   "type": "SESSION_CLOSED",
@@ -406,19 +435,20 @@ stopHosting: async () => {
 
 ## Error Codes
 
-| Code | Description | Action |
-|------|-------------|--------|
-| `SESSION_NOT_FOUND` | Invalid session ID | Close connection |
-| `ALREADY_JOINED` | Duplicate join attempt | Close connection, keep existing |
-| `SESSION_FULL` | Max members reached | Close connection |
-| `INVALID_MESSAGE` | Malformed message | Log error, continue |
-| `HEARTBEAT_TIMEOUT` | No heartbeat for 15s | Disconnect client |
+| Code                | Description            | Action                          |
+| ------------------- | ---------------------- | ------------------------------- |
+| `SESSION_NOT_FOUND` | Invalid session ID     | Close connection                |
+| `ALREADY_JOINED`    | Duplicate join attempt | Close connection, keep existing |
+| `SESSION_FULL`      | Max members reached    | Close connection                |
+| `INVALID_MESSAGE`   | Malformed message      | Log error, continue             |
+| `HEARTBEAT_TIMEOUT` | No heartbeat for 15s   | Disconnect client               |
 
 ---
 
 ## Testing
 
 ### Unit Tests
+
 ```typescript
 import { sessionServerManager } from "./sessionServerManager";
 import { sessionRegistry } from "./sessionRegistry";
@@ -435,7 +465,7 @@ describe("SessionServerManager", () => {
       maxMembers: 8,
     });
   });
-  
+
   it("should create server", async () => {
     await sessionServerManager.createServer({
       sessionId: "TEST123",
@@ -443,25 +473,25 @@ describe("SessionServerManager", () => {
       hostId: "host-1",
       hostName: "Host",
     });
-    
+
     expect(sessionServerManager.isRunning()).toBe(true);
   });
-  
+
   it("should accept valid clients", () => {
     const accepted = sessionServerManager.acceptClient("guest-1", "Guest");
     expect(accepted).toBe(true);
   });
-  
+
   it("should reject duplicate joins", () => {
     sessionServerManager.acceptClient("guest-1", "Guest");
     const rejected = sessionServerManager.acceptClient("guest-1", "Guest");
     expect(rejected).toBe(false);
   });
-  
+
   it("should track members", () => {
     sessionServerManager.acceptClient("guest-1", "Guest");
     sessionServerManager.registerMember("guest-1", "Guest");
-    
+
     const members = sessionServerManager.getMembers();
     expect(members).toHaveLength(2); // host + guest
   });
@@ -473,6 +503,7 @@ describe("SessionServerManager", () => {
 ## Debugging
 
 ### Enable Verbose Logging
+
 ```typescript
 // All logs prefixed with [SessionServerManager]
 console.log("[SessionServerManager] Creating server...");
@@ -481,6 +512,7 @@ console.log("[SessionServerManager] ❌ Session full (8/8)");
 ```
 
 ### Check Server State
+
 ```typescript
 // Is server running?
 console.log("Running:", sessionServerManager.isRunning());
@@ -496,6 +528,7 @@ console.log("Options:", sessionServerManager.getOptions());
 ```
 
 ### Monitor Events
+
 ```typescript
 sessionServerManager.setCallbacks({
   onMemberJoined: (member) => console.log("Joined:", member),
@@ -512,9 +545,11 @@ sessionServerManager.setCallbacks({
 ## Production Deployment
 
 ### Native Module Required
+
 WebSocket server requires native implementation:
 
 **iOS (Swift):**
+
 ```swift
 import SocketRocket
 
@@ -529,6 +564,7 @@ class WebSocketServerModule: NSObject {
 ```
 
 **Android (Kotlin):**
+
 ```kotlin
 import okhttp3.WebSocket
 
@@ -542,6 +578,7 @@ class WebSocketServerModule(context: ReactApplicationContext) : ReactContextBase
 ```
 
 ### Build Commands
+
 ```bash
 # Expo
 eas build --platform ios
@@ -558,11 +595,13 @@ cd android && ./gradlew assembleRelease
 ## Security Notes
 
 ⚠️ **Current Implementation:**
+
 - No encryption (plaintext WebSocket)
 - No authentication (session code only)
 - Local network only
 
 🔒 **Future Enhancements:**
+
 - Use `wss://` (WebSocket Secure)
 - Add TLS certificates
 - Implement session passwords
@@ -575,6 +614,7 @@ cd android && ./gradlew assembleRelease
 ## Performance
 
 **Benchmarks:**
+
 - Server startup: < 100ms
 - Client connection: < 50ms
 - Message broadcast: < 10ms per client
@@ -582,6 +622,7 @@ cd android && ./gradlew assembleRelease
 - Memory: ~10KB per client
 
 **Capacity:**
+
 - Recommended: 8 clients
 - Maximum: 50 clients (depends on device)
 - Heartbeat timeout: 15 seconds
@@ -591,18 +632,22 @@ cd android && ./gradlew assembleRelease
 ## Common Issues
 
 ### "Server already running"
+
 **Cause:** Trying to create server twice  
 **Solution:** Call `stopServer()` first
 
 ### "Session not found in registry"
+
 **Cause:** Forgot to register session  
 **Solution:** Call `sessionRegistry.registerSession()` first
 
 ### "Cannot read property 'stop' of null"
+
 **Cause:** Trying to stop non-existent server  
 **Solution:** Check `isRunning()` first
 
 ### "WebSocket connection failed"
+
 **Cause:** Native modules not available (Expo Go)  
 **Solution:** Build production app or use simulated discovery
 

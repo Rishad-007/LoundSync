@@ -7,6 +7,7 @@
 import AsyncStorage from "@react-native-async-storage/async-storage";
 import { create } from "zustand";
 import { createJSONStorage, persist } from "zustand/middleware";
+import { useShallow } from "zustand/react/shallow";
 
 import { createDeviceSlice } from "./slices/deviceSlice";
 import { createNetworkSlice } from "./slices/networkSlice";
@@ -126,47 +127,56 @@ export const useNetworkError = () =>
 /**
  * Action Hooks
  * Expose actions as hooks for easy consumption
+ * Using useShallow to prevent infinite loops from object recreation
  */
 
 // User actions
 export const useUserActions = () =>
-  useLoudSyncStore((state) => ({
-    setLocalDevice: state.setLocalDevice,
-    updateDeviceName: state.updateDeviceName,
-    generateDeviceId: state.generateDeviceId,
-    setOnboarded: state.setOnboarded,
-  }));
+  useLoudSyncStore(
+    useShallow((state) => ({
+      setLocalDevice: state.setLocalDevice,
+      updateDeviceName: state.updateDeviceName,
+      generateDeviceId: state.generateDeviceId,
+      setOnboarded: state.setOnboarded,
+    })),
+  );
 
 // Session actions
 export const useSessionActions = () =>
-  useLoudSyncStore((state) => ({
-    createSession: state.createSession,
-    startHosting: state.startHosting,
-    stopHosting: state.stopHosting,
-    discoverSessions: state.discoverSessions,
-    stopDiscovery: state.stopDiscovery,
-    joinSession: state.joinSession,
-    leaveSession: state.leaveSession,
-  }));
+  useLoudSyncStore(
+    useShallow((state) => ({
+      createSession: state.createSession,
+      startHosting: state.startHosting,
+      stopHosting: state.stopHosting,
+      discoverSessions: state.discoverSessions,
+      stopDiscovery: state.stopDiscovery,
+      joinSession: state.joinSession,
+      leaveSession: state.leaveSession,
+    })),
+  );
 
 // Member actions
 export const useMemberActions = () =>
-  useLoudSyncStore((state) => ({
-    addMember: state.addMember,
-    removeMember: state.removeMember,
-    updateMember: state.updateMember,
-    acceptRequest: state.acceptRequest,
-    rejectRequest: state.rejectRequest,
-    kickMember: state.kickMember,
-  }));
+  useLoudSyncStore(
+    useShallow((state) => ({
+      addMember: state.addMember,
+      removeMember: state.removeMember,
+      updateMember: state.updateMember,
+      acceptRequest: state.acceptRequest,
+      rejectRequest: state.rejectRequest,
+      kickMember: state.kickMember,
+    })),
+  );
 
 // Network actions
 export const useNetworkActions = () =>
-  useLoudSyncStore((state) => ({
-    checkNetwork: state.checkNetwork,
-    setNetworkAvailable: state.setNetworkAvailable,
-    updateMetrics: state.updateMetrics,
-  }));
+  useLoudSyncStore(
+    useShallow((state) => ({
+      checkNetwork: state.checkNetwork,
+      setNetworkAvailable: state.setNetworkAvailable,
+      updateMetrics: state.updateMetrics,
+    })),
+  );
 
 /**
  * Developer tools

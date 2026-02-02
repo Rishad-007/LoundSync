@@ -4,6 +4,8 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useState } from "react";
 import {
+  ActivityIndicator,
+  Alert,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -24,13 +26,24 @@ import {
   GradientButton,
   IconButton,
 } from "../src/components";
-import { sessionRegistry } from "../src/network";
+import {
+  useSessionActions,
+  useSessionError,
+  useSessionStatus,
+} from "../src/state";
 import { theme } from "../src/theme";
 
 const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
 
 export default function CreateSessionScreen() {
   const router = useRouter();
+
+  // Zustand state
+  const { createSession, startHosting } = useSessionActions();
+  const sessionStatus = useSessionStatus();
+  const sessionError = useSessionError();
+
+  // Local state
   const [sessionName, setSessionName] = useState("");
   const [hostName, setHostName] = useState("");
   const [maxDevices, setMaxDevices] = useState("8");
@@ -39,6 +52,7 @@ export default function CreateSessionScreen() {
     name: string;
     duration: string;
   } | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
 
   const handleUploadMP3 = () => {
     // Mock file upload
@@ -58,31 +72,39 @@ export default function CreateSessionScreen() {
     return `${code.slice(0, 3)}-${code.slice(3, 6)}`;
   };
 
-  const handleCreateSession = () => {
-    const sessionCode = generateSessionCode();
-    // Remove dash for internal ID
-    const sessionId = sessionCode.replace("-", "");
+  const handleCreateSession = async () => {
+    try {
+      setIsCreating(true);
 
-    // Register session in the registry BEFORE navigating
-    sessionRegistry.registerSession({
-      sessionId,
-      sessionCode: sessionId, // Store without dash
-      sessionName: sessionName || "My Party",
-      hostId: `host-${Date.now()}`, // Generate unique host ID
-      hostName: hostName || "Party Host",
-      maxMembers: parseInt(maxDevices) || 8,
-    });
+      const finalSessionName = sessionName.trim() || "My Party";
+      const finalMaxDevices = parseInt(maxDevices) || 8;
 
-    console.log(`✅ Session registered: ${sessionCode} (ID: ${sessionId})`);
+      console.log("[CreateSession] Creating session:", finalSessionName);
 
-    router.push({
-      pathname: "/player-room",
-      params: {
-        sessionId,
-        sessionName: sessionName || "My Party",
-        isHost: "true",
-      },
-    });
+      // Step 1: Create session in Zustand store
+      await createSession(finalSessionName);
+
+      console.log("[CreateSession] ✅ Session created, starting host...");
+
+      // Step 2: Start hosting (starts WebSocket server + broadcasts)
+      await startHosting();
+
+      console.log(
+        "[CreateSession] ✅ Hosting started, navigating to player room",
+      );
+
+      // Step 3: Navigate to player room
+      router.push("/player-room");
+    } catch (error) {
+      console.error("[CreateSession] Failed to create session:", error);
+      setIsCreating(false);
+
+      Alert.alert(
+        "Failed to Create Session",
+        error instanceof Error ? error.message : "Unknown error",
+        [{ text: "OK" }],
+      );
+    }
   };
 
   return (
@@ -423,17 +445,65 @@ export default function CreateSessionScreen() {
               </View>
             </AnimatedGlassCard>
 
+            {/* Status Indicator */}
+            {isCreating && (
+              <AnimatedGlassCard
+                entering={FadeInUp.duration(400)}
+                intensity="medium"
+                style={styles.statusCard}
+              >
+                <View style={styles.statusContent}>
+                  <ActivityIndicator
+                    size="small"
+                    color={theme.colors.neon.cyan}
+                  />
+                  <AppText variant="body" weight="semibold">
+                    {sessionStatus === "hosting"
+                      ? "Starting host..."
+                      : "Creating session..."}
+                  </AppText>
+                </View>
+              </AnimatedGlassCard>
+            )}
+
+            {/* Error Display */}
+            {sessionError && !isCreating && (
+              <AnimatedGlassCard
+                entering={FadeInUp.duration(400)}
+                intensity="medium"
+                style={styles.errorCard}
+              >
+                <View style={styles.statusContent}>
+                  <Ionicons
+                    name="alert-circle"
+                    size={24}
+                    color={theme.colors.error}
+                  />
+                  <AppText variant="body" color={theme.colors.error}>
+                    {sessionError}
+                  </AppText>
+                </View>
+              </AnimatedGlassCard>
+            )}
+
             {/* Start Session Button */}
             <Animated.View
               entering={FadeInUp.delay(500).duration(600).springify()}
               style={styles.actions}
             >
               <GradientButton
-                title="Start Session"
+                title={isCreating ? "Creating..." : "Start Session"}
                 gradient="party"
                 size="lg"
                 fullWidth
-                icon={<Ionicons name="rocket" size={24} color="white" />}
+                disabled={isCreating}
+                icon={
+                  isCreating ? (
+                    <ActivityIndicator size="small" color="white" />
+                  ) : (
+                    <Ionicons name="rocket" size={24} color="white" />
+                  )
+                }
                 onPress={handleCreateSession}
               />
               <AppText
@@ -577,6 +647,19 @@ const styles = StyleSheet.create({
   infoText: {
     flex: 1,
     gap: theme.spacing.xs,
+  },
+  statusCard: {
+    marginBottom: theme.spacing.md,
+    backgroundColor: "rgba(0, 255, 255, 0.1)",
+  },
+  errorCard: {
+    marginBottom: theme.spacing.md,
+    backgroundColor: "rgba(255, 59, 48, 0.1)",
+  },
+  statusContent: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
   },
   actions: {
     marginBottom: theme.spacing.xl,
