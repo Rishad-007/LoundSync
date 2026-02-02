@@ -4,14 +4,21 @@ import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect, useRef, useState } from "react";
 import {
-  Animated,
   KeyboardAvoidingView,
   Platform,
+  Animated as RNAnimated,
   ScrollView,
   StyleSheet,
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  FadeIn,
+  FadeInDown,
+  FadeInUp,
+  Layout,
+  SlideInLeft,
+} from "react-native-reanimated";
 import {
   AppText,
   GlassCard,
@@ -20,17 +27,19 @@ import {
 } from "../src/components";
 import { theme } from "../src/theme";
 
+const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
+
 export default function JoinSessionScreen() {
   const router = useRouter();
   const [sessionCode, setSessionCode] = useState("");
   const [isScanning, setIsScanning] = useState(true);
-  const radarRotation = useRef(new Animated.Value(0)).current;
-  const pulseAnim = useRef(new Animated.Value(0)).current;
+  const radarRotation = useRef(new RNAnimated.Value(0)).current;
+  const pulseAnim = useRef(new RNAnimated.Value(0)).current;
 
   useEffect(() => {
     // Radar rotation animation
-    Animated.loop(
-      Animated.timing(radarRotation, {
+    RNAnimated.loop(
+      RNAnimated.timing(radarRotation, {
         toValue: 1,
         duration: 3000,
         useNativeDriver: true,
@@ -38,14 +47,14 @@ export default function JoinSessionScreen() {
     ).start();
 
     // Pulse animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(pulseAnim, {
+    RNAnimated.loop(
+      RNAnimated.sequence([
+        RNAnimated.timing(pulseAnim, {
           toValue: 1,
           duration: 1500,
           useNativeDriver: true,
         }),
-        Animated.timing(pulseAnim, {
+        RNAnimated.timing(pulseAnim, {
           toValue: 0,
           duration: 1500,
           useNativeDriver: true,
@@ -116,7 +125,10 @@ export default function JoinSessionScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Header */}
-            <View style={styles.header}>
+            <Animated.View
+              entering={FadeInDown.duration(600).springify()}
+              style={styles.header}
+            >
               <IconButton
                 icon={
                   <Ionicons
@@ -136,10 +148,13 @@ export default function JoinSessionScreen() {
               <AppText variant="body" color={theme.colors.text.secondary}>
                 Scan nearby or enter code
               </AppText>
-            </View>
+            </Animated.View>
 
             {/* Animated Radar Scanner */}
-            <View style={styles.radarSection}>
+            <Animated.View
+              entering={FadeIn.delay(200).duration(800)}
+              style={styles.radarSection}
+            >
               <GlassCard intensity="heavy" style={styles.radarCard}>
                 <LinearGradient
                   colors={[...theme.gradients.electric, "transparent"]}
@@ -203,11 +218,15 @@ export default function JoinSessionScreen() {
                   </AppText>
                 )}
               </GlassCard>
-            </View>
+            </Animated.View>
 
             {/* Nearby Sessions */}
             {!isScanning && (
-              <View style={styles.nearbySection}>
+              <Animated.View
+                entering={FadeInUp.delay(100).duration(600).springify()}
+                layout={Layout.springify()}
+                style={styles.nearbySection}
+              >
                 <View style={styles.sectionHeader}>
                   <Ionicons
                     name="wifi"
@@ -219,7 +238,13 @@ export default function JoinSessionScreen() {
                   </AppText>
                 </View>
 
-                <GlassCard intensity="medium" style={styles.sessionCard}>
+                <AnimatedGlassCard
+                  entering={SlideInLeft.delay(200).duration(600).springify()}
+                  layout={Layout.springify()}
+                  intensity="medium"
+                  pressable
+                  style={styles.sessionCard}
+                >
                   <LinearGradient
                     colors={[...theme.gradients.party, "transparent"]}
                     start={{ x: 0, y: 0 }}
@@ -261,9 +286,15 @@ export default function JoinSessionScreen() {
                       onPress={() => handleJoinSession()}
                     />
                   </View>
-                </GlassCard>
+                </AnimatedGlassCard>
 
-                <GlassCard intensity="medium" style={styles.sessionCard}>
+                <AnimatedGlassCard
+                  entering={SlideInLeft.delay(300).duration(600).springify()}
+                  layout={Layout.springify()}
+                  intensity="medium"
+                  pressable
+                  style={styles.sessionCard}
+                >
                   <LinearGradient
                     colors={[...theme.gradients.sunset, "transparent"]}
                     start={{ x: 0, y: 0 }}
@@ -305,9 +336,15 @@ export default function JoinSessionScreen() {
                       onPress={() => handleJoinSession()}
                     />
                   </View>
-                </GlassCard>
+                </AnimatedGlassCard>
 
-                <GlassCard intensity="medium" style={styles.sessionCard}>
+                <AnimatedGlassCard
+                  entering={SlideInLeft.delay(400).duration(600).springify()}
+                  layout={Layout.springify()}
+                  intensity="medium"
+                  pressable
+                  style={styles.sessionCard}
+                >
                   <LinearGradient
                     colors={[...theme.gradients.lime, "transparent"]}
                     start={{ x: 0, y: 0 }}
@@ -349,12 +386,15 @@ export default function JoinSessionScreen() {
                       onPress={() => handleJoinSession()}
                     />
                   </View>
-                </GlassCard>
-              </View>
+                </AnimatedGlassCard>
+              </Animated.View>
             )}
 
             {/* Manual Code Input */}
-            <View style={styles.codeInputSection}>
+            <Animated.View
+              entering={FadeInUp.delay(200).duration(600).springify()}
+              style={styles.codeInputSection}
+            >
               <View style={styles.sectionHeader}>
                 <Ionicons
                   name="keypad"
@@ -393,10 +433,13 @@ export default function JoinSessionScreen() {
               >
                 Get the code from your session host
               </AppText>
-            </View>
+            </Animated.View>
 
             {/* Recent Sessions */}
-            <View style={styles.quickJoinSection}>
+            <Animated.View
+              entering={FadeInUp.delay(300).duration(600).springify()}
+              style={styles.quickJoinSection}
+            >
               <View style={styles.sectionHeader}>
                 <Ionicons
                   name="time"
@@ -473,10 +516,15 @@ export default function JoinSessionScreen() {
                   />
                 </View>
               </GlassCard>
-            </View>
+            </Animated.View>
 
             {/* Info Card */}
-            <GlassCard intensity="light" style={styles.infoCard}>
+            <AnimatedGlassCard
+              entering={FadeInUp.delay(400).duration(600).springify()}
+              intensity="light"
+              pressable
+              style={styles.infoCard}
+            >
               <View style={styles.infoRow}>
                 <Ionicons
                   name="help-circle"
@@ -493,10 +541,13 @@ export default function JoinSessionScreen() {
                   </AppText>
                 </View>
               </View>
-            </GlassCard>
+            </AnimatedGlassCard>
 
             {/* Join Button */}
-            <View style={styles.actions}>
+            <Animated.View
+              entering={FadeInUp.delay(500).duration(600).springify()}
+              style={styles.actions}
+            >
               <GradientButton
                 title="Join Session"
                 gradient="secondary"
@@ -506,7 +557,7 @@ export default function JoinSessionScreen() {
                 icon={<Ionicons name="enter" size={24} color="white" />}
                 onPress={handleJoinSession}
               />
-            </View>
+            </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </LinearGradient>

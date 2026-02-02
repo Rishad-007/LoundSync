@@ -11,6 +11,13 @@ import {
   TextInput,
   View,
 } from "react-native";
+import Animated, {
+  FadeInDown,
+  FadeInUp,
+  Layout,
+  SlideInRight,
+  ZoomIn,
+} from "react-native-reanimated";
 import {
   AppText,
   GlassCard,
@@ -18,6 +25,8 @@ import {
   IconButton,
 } from "../src/components";
 import { theme } from "../src/theme";
+
+const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
 
 export default function CreateSessionScreen() {
   const router = useRouter();
@@ -71,7 +80,10 @@ export default function CreateSessionScreen() {
             showsVerticalScrollIndicator={false}
           >
             {/* Header */}
-            <View style={styles.header}>
+            <Animated.View
+              entering={FadeInDown.duration(600).springify()}
+              style={styles.header}
+            >
               <IconButton
                 icon={
                   <Ionicons
@@ -91,12 +103,18 @@ export default function CreateSessionScreen() {
               <AppText variant="body" color={theme.colors.text.secondary}>
                 Set up your party room
               </AppText>
-            </View>
+            </Animated.View>
 
             {/* Form */}
             <View style={styles.form}>
               {/* Session Details Card */}
-              <GlassCard intensity="medium" style={styles.sectionCard}>
+              <AnimatedGlassCard
+                entering={FadeInUp.delay(100).duration(600).springify()}
+                layout={Layout.springify()}
+                intensity="medium"
+                pressable
+                style={styles.sectionCard}
+              >
                 <LinearGradient
                   colors={[...theme.gradients.primary, "transparent"]}
                   start={{ x: 0, y: 0 }}
@@ -165,10 +183,16 @@ export default function CreateSessionScreen() {
                     keyboardType="number-pad"
                   />
                 </View>
-              </GlassCard>
+              </AnimatedGlassCard>
 
               {/* Music Source Card */}
-              <GlassCard intensity="medium" style={styles.sectionCard}>
+              <AnimatedGlassCard
+                entering={FadeInUp.delay(200).duration(600).springify()}
+                layout={Layout.springify()}
+                intensity="medium"
+                pressable
+                style={styles.sectionCard}
+              >
                 <LinearGradient
                   colors={[...theme.gradients.secondary, "transparent"]}
                   start={{ x: 0, y: 0 }}
@@ -228,11 +252,17 @@ export default function CreateSessionScreen() {
                     />
                   </View>
                 </View>
-              </GlassCard>
+              </AnimatedGlassCard>
 
               {/* Song Preview Card */}
               {uploadedSong && (
-                <GlassCard intensity="heavy" style={styles.songPreviewCard}>
+                <AnimatedGlassCard
+                  entering={ZoomIn.duration(400).springify()}
+                  layout={Layout.springify()}
+                  intensity="heavy"
+                  pressable
+                  style={styles.songPreviewCard}
+                >
                   <LinearGradient
                     colors={theme.gradients.sunset}
                     start={{ x: 0, y: 0 }}
@@ -282,12 +312,18 @@ export default function CreateSessionScreen() {
                       />
                     </View>
                   </LinearGradient>
-                </GlassCard>
+                </AnimatedGlassCard>
               )}
             </View>
 
             {/* Settings Card */}
-            <GlassCard intensity="medium" style={styles.sectionCard}>
+            <AnimatedGlassCard
+              entering={FadeInUp.delay(300).duration(600).springify()}
+              layout={Layout.springify()}
+              intensity="medium"
+              pressable
+              style={styles.sectionCard}
+            >
               <LinearGradient
                 colors={[...theme.gradients.lime, "transparent"]}
                 start={{ x: 0, y: 0 }}
@@ -337,10 +373,15 @@ export default function CreateSessionScreen() {
                   <AppText variant="body">Auto-sync Enabled</AppText>
                 </View>
               </GlassCard>
-            </GlassCard>
+            </AnimatedGlassCard>
 
             {/* Info Card */}
-            <GlassCard intensity="light" style={styles.infoCard}>
+            <AnimatedGlassCard
+              entering={SlideInRight.delay(400).duration(600).springify()}
+              intensity="light"
+              pressable
+              style={styles.infoCard}
+            >
               <View style={styles.infoRow}>
                 <Ionicons
                   name="information-circle"
@@ -356,10 +397,13 @@ export default function CreateSessionScreen() {
                   </AppText>
                 </View>
               </View>
-            </GlassCard>
+            </AnimatedGlassCard>
 
             {/* Start Session Button */}
-            <View style={styles.actions}>
+            <Animated.View
+              entering={FadeInUp.delay(500).duration(600).springify()}
+              style={styles.actions}
+            >
               <GradientButton
                 title="Start Session"
                 gradient="party"
@@ -375,7 +419,7 @@ export default function CreateSessionScreen() {
               >
                 You can invite friends after creating the session
               </AppText>
-            </View>
+            </Animated.View>
           </ScrollView>
         </KeyboardAvoidingView>
       </LinearGradient>

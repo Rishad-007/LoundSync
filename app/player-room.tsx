@@ -3,8 +3,19 @@ import Slider from "@react-native-community/slider";
 import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useEffect, useRef, useState } from "react";
-import { Animated, ScrollView, StyleSheet, View } from "react-native";
+import React, { useEffect } from "react";
+import { ScrollView, StyleSheet, View } from "react-native";
+import Animated, {
+  Easing,
+  FadeIn,
+  FadeInUp,
+  interpolate,
+  useAnimatedStyle,
+  useSharedValue,
+  withRepeat,
+  withSequence,
+  withTiming,
+} from "react-native-reanimated";
 import {
   AppText,
   GlassCard,
@@ -12,6 +23,8 @@ import {
   IconButton,
 } from "../src/components";
 import { theme } from "../src/theme";
+
+const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
 
 export default function PlayerRoomScreen() {
   const router = useRouter();
@@ -21,71 +34,77 @@ export default function PlayerRoomScreen() {
     isHost: string;
   }>();
 
-  const [isPlaying, setIsPlaying] = useState(false);
-  const [connectedDevices] = useState(3);
-  const [volume, setVolume] = useState(0.75);
-  const [progress, setProgress] = useState(0.35);
-  const [syncHealth, setSyncHealth] = useState(92); // 92% sync health
+  const [isPlaying, setIsPlaying] = React.useState(false);
+  const [connectedDevices] = React.useState(3);
+  const [volume, setVolume] = React.useState(0.75);
+  const [progress, setProgress] = React.useState(0.35);
+  const [syncHealth, setSyncHealth] = React.useState(92);
 
-  // Waveform animations
-  const waveAnims = useRef(
-    Array.from({ length: 20 }, () => new Animated.Value(0.3)),
-  ).current;
+  // Enhanced waveform animations with Reanimated
+  const waveAnims = Array.from({ length: 20 }, () => useSharedValue(0.3));
 
-  // Party color pulse animation
-  const colorPulse = useRef(new Animated.Value(0)).current;
+  // Neon glow pulse
+  const glowPulse = useSharedValue(0);
+
+  // Party color pulse
+  const colorPulse = useSharedValue(0);
+
+  useEffect(() => {
+    // Start glow pulse
+    glowPulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 1500, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+
+    // Start color pulse
+    colorPulse.value = withRepeat(
+      withSequence(
+        withTiming(1, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+        withTiming(0, { duration: 2000, easing: Easing.inOut(Easing.ease) }),
+      ),
+      -1,
+      false,
+    );
+  }, []);
 
   useEffect(() => {
     // Waveform animation
     if (isPlaying) {
-      const animations = waveAnims.map((anim, index) =>
-        Animated.loop(
-          Animated.sequence([
-            Animated.timing(anim, {
-              toValue: Math.random() * 0.7 + 0.3,
+      waveAnims.forEach((anim, index) => {
+        anim.value = withRepeat(
+          withSequence(
+            withTiming(Math.random() * 0.8 + 0.4, {
               duration: 300 + Math.random() * 200,
-              useNativeDriver: true,
+              easing: Easing.inOut(Easing.ease),
             }),
-            Animated.timing(anim, {
-              toValue: Math.random() * 0.4 + 0.2,
+            withTiming(Math.random() * 0.5 + 0.2, {
               duration: 300 + Math.random() * 200,
-              useNativeDriver: true,
+              easing: Easing.inOut(Easing.ease),
             }),
-          ]),
-        ),
-      );
-      Animated.stagger(50, animations).start();
+          ),
+          -1,
+          false,
+        );
+      });
     } else {
       waveAnims.forEach((anim) => {
-        Animated.timing(anim, {
-          toValue: 0.3,
-          duration: 300,
-          useNativeDriver: true,
-        }).start();
+        anim.value = withTiming(0.3, { duration: 300 });
       });
     }
-
-    // Color pulse animation
-    Animated.loop(
-      Animated.sequence([
-        Animated.timing(colorPulse, {
-          toValue: 1,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-        Animated.timing(colorPulse, {
-          toValue: 0,
-          duration: 2000,
-          useNativeDriver: true,
-        }),
-      ]),
-    ).start();
   }, [isPlaying]);
 
-  const colorPulseOpacity = colorPulse.interpolate({
-    inputRange: [0, 1],
-    outputRange: [0.1, 0.3],
-  });
+  const glowAnimatedStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(glowPulse.value, [0, 1], [0.5, 1]),
+    transform: [{ scale: interpolate(glowPulse.value, [0, 1], [1, 1.02]) }],
+  }));
+
+  const colorPulseStyle = useAnimatedStyle(() => ({
+    opacity: interpolate(colorPulse.value, [0, 1], [0.15, 0.35]),
+  }));
 
   const isHost = params.isHost === "true";
 
@@ -107,13 +126,9 @@ export default function PlayerRoomScreen() {
         ]}
         style={styles.container}
       >
-        {/* Party Color Effects */}
+        {/* Party Color Effects with Neon Glow */}
         <Animated.View
-          style={[
-            styles.colorEffect,
-            styles.colorEffectTop,
-            { opacity: colorPulseOpacity },
-          ]}
+          style={[styles.colorEffect, styles.colorEffectTop, colorPulseStyle]}
         >
           <LinearGradient
             colors={[theme.colors.neon.pink + "60", "transparent"]}
@@ -124,7 +139,7 @@ export default function PlayerRoomScreen() {
           style={[
             styles.colorEffect,
             styles.colorEffectBottom,
-            { opacity: colorPulseOpacity },
+            colorPulseStyle,
           ]}
         >
           <LinearGradient
@@ -138,7 +153,7 @@ export default function PlayerRoomScreen() {
           showsVerticalScrollIndicator={false}
         >
           {/* Header */}
-          <View style={styles.header}>
+          <Animated.View entering={FadeIn.duration(600)} style={styles.header}>
             <View style={styles.headerTop}>
               <IconButton
                 icon={
@@ -172,10 +187,15 @@ export default function PlayerRoomScreen() {
             <AppText variant="body" color={theme.colors.text.secondary} center>
               Session: {params.sessionId}
             </AppText>
-          </View>
+          </Animated.View>
 
           {/* Session Info with Sync Health */}
-          <GlassCard intensity="medium" style={styles.infoCard}>
+          <AnimatedGlassCard
+            entering={FadeInUp.delay(100).duration(600).springify()}
+            intensity="medium"
+            pressable
+            style={styles.infoCard}
+          >
             <View style={styles.infoRow}>
               <View style={styles.infoItem}>
                 <Ionicons
@@ -243,10 +263,14 @@ export default function PlayerRoomScreen() {
                 synchronization
               </AppText>
             </View>
-          </GlassCard>
+          </AnimatedGlassCard>
 
           {/* Player Section */}
-          <GlassCard intensity="heavy" style={styles.playerCard}>
+          <AnimatedGlassCard
+            entering={FadeInUp.delay(200).duration(600).springify()}
+            intensity="heavy"
+            style={styles.playerCard}
+          >
             {/* Now Playing Badge */}
             {isPlaying && (
               <View style={styles.nowPlayingBadge}>
@@ -284,24 +308,24 @@ export default function PlayerRoomScreen() {
                 />
               </LinearGradient>
 
-              {/* Animated Waveform */}
-              <View style={styles.waveformContainer}>
-                {waveAnims.map((anim, index) => (
-                  <Animated.View
-                    key={index}
-                    style={[
-                      styles.waveBar,
-                      {
-                        transform: [
-                          {
-                            scaleY: anim,
-                          },
-                        ],
-                      },
-                    ]}
-                  />
-                ))}
-              </View>
+              {/* Animated Waveform with Neon Glow */}
+              <Animated.View
+                entering={FadeIn.delay(400).duration(800)}
+                style={styles.waveformContainer}
+              >
+                {waveAnims.map((anim, index) => {
+                  const waveStyle = useAnimatedStyle(() => ({
+                    transform: [{ scaleY: anim.value }],
+                  }));
+
+                  return (
+                    <Animated.View
+                      key={index}
+                      style={[styles.waveBar, waveStyle]}
+                    />
+                  );
+                })}
+              </Animated.View>
             </View>
 
             {/* Track Info */}
@@ -410,10 +434,13 @@ export default function PlayerRoomScreen() {
                 {Math.round(volume * 100)}%
               </AppText>
             </View>
-          </GlassCard>
+          </AnimatedGlassCard>
 
           {/* Actions */}
-          <View style={styles.actions}>
+          <Animated.View
+            entering={FadeInUp.delay(300).duration(600).springify()}
+            style={styles.actions}
+          >
             <GradientButton
               title={`View Devices (${connectedDevices})`}
               gradient="electric"
@@ -442,10 +469,13 @@ export default function PlayerRoomScreen() {
               icon={<Ionicons name="exit" size={20} color="white" />}
               onPress={handleLeaveSession}
             />
-          </View>
+          </Animated.View>
 
           {/* Connected Users - Device Grid */}
-          <View style={styles.usersSection}>
+          <Animated.View
+            entering={FadeInUp.delay(400).duration(600).springify()}
+            style={styles.usersSection}
+          >
             <View style={styles.sectionHeaderRow}>
               <View style={styles.sectionHeaderLeft}>
                 <Ionicons
@@ -590,7 +620,7 @@ export default function PlayerRoomScreen() {
                 </GlassCard>
               ))}
             </View>
-          </View>
+          </Animated.View>
         </ScrollView>
       </LinearGradient>
     </>
