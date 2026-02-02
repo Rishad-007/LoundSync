@@ -1,6 +1,6 @@
 import { BlurView } from "expo-blur";
 import React from "react";
-import { StyleSheet, View, ViewProps } from "react-native";
+import { StyleSheet, ViewProps } from "react-native";
 import Animated, {
   useAnimatedStyle,
   useSharedValue,
@@ -18,8 +18,6 @@ interface GlassCardProps extends ViewProps {
   pressable?: boolean;
   children: React.ReactNode;
 }
-
-const AnimatedView = Animated.createAnimatedComponent(View);
 
 export const GlassCard: React.FC<GlassCardProps> = ({
   intensity = "medium",
@@ -57,16 +55,19 @@ export const GlassCard: React.FC<GlassCardProps> = ({
     onTouchEnd?.(e);
   };
 
-  const animatedStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: scale.value }],
-  }));
+  const animatedStyle = useAnimatedStyle(() => {
+    if (!pressable) return {};
+    return {
+      transform: [{ scale: scale.value }],
+    };
+  });
 
   const glowStyle = useAnimatedStyle(() => ({
     opacity: glowOpacity.value,
   }));
 
   return (
-    <AnimatedView
+    <Animated.View
       style={[
         styles.container,
         {
@@ -76,7 +77,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
           borderColor: "rgba(255, 255, 255, 0.1)",
         },
         theme.shadows.md,
-        animatedStyle,
+        pressable && animatedStyle,
         style,
       ]}
       onTouchStart={handlePressIn}
@@ -90,7 +91,7 @@ export const GlassCard: React.FC<GlassCardProps> = ({
       <BlurView intensity={theme.blur[blur]} style={styles.blur} tint="dark">
         {children}
       </BlurView>
-    </AnimatedView>
+    </Animated.View>
   );
 };
 
