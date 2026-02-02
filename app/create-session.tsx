@@ -22,7 +22,21 @@ import { theme } from "../src/theme";
 export default function CreateSessionScreen() {
   const router = useRouter();
   const [sessionName, setSessionName] = useState("");
+  const [hostName, setHostName] = useState("");
   const [maxDevices, setMaxDevices] = useState("8");
+  const [songUrl, setSongUrl] = useState("");
+  const [uploadedSong, setUploadedSong] = useState<{
+    name: string;
+    duration: string;
+  } | null>(null);
+
+  const handleUploadMP3 = () => {
+    // Mock file upload
+    setUploadedSong({
+      name: "Summer Vibes Mix.mp3",
+      duration: "3:45",
+    });
+  };
 
   const handleCreateSession = () => {
     // Generate a mock session ID

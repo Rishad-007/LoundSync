@@ -1,41 +1,70 @@
-import React, { useState } from 'react';
-import { StyleSheet, View, ScrollView, Platform } from 'react-native';
-import { useRouter } from 'expo-router';
-import { BlurView } from 'expo-blur';
-import { Ionicons } from '@expo/vector-icons';
-import { StatusBar } from 'expo-status-bar';
-import { theme } from '../../src/theme';
-import { AppText, GradientButton, GlassCard, IconButton } from '../../src/components';
+import { Ionicons } from "@expo/vector-icons";
+import { BlurView } from "expo-blur";
+import { useRouter } from "expo-router";
+import { StatusBar } from "expo-status-bar";
+import React, { useState } from "react";
+import { Platform, ScrollView, StyleSheet, View } from "react-native";
+import {
+  AppText,
+  GlassCard,
+  GradientButton,
+  IconButton,
+} from "../../src/components";
+import { theme } from "../../src/theme";
 
 export default function DeviceListModal() {
   const router = useRouter();
   const [devices] = useState([
-    { id: '1', name: 'iPhone 15 Pro', type: 'phone', status: 'connected', latency: 8 },
-    { id: '2', name: 'Samsung Galaxy S23', type: 'phone', status: 'connected', latency: 12 },
-    { id: '3', name: 'iPad Pro', type: 'tablet', status: 'connected', latency: 10 },
-    { id: '4', name: 'MacBook Pro', type: 'laptop', status: 'pending', latency: 0 },
+    {
+      id: "1",
+      name: "iPhone 15 Pro",
+      type: "phone",
+      status: "connected",
+      latency: 8,
+    },
+    {
+      id: "2",
+      name: "Samsung Galaxy S23",
+      type: "phone",
+      status: "connected",
+      latency: 12,
+    },
+    {
+      id: "3",
+      name: "iPad Pro",
+      type: "tablet",
+      status: "connected",
+      latency: 10,
+    },
+    {
+      id: "4",
+      name: "MacBook Pro",
+      type: "laptop",
+      status: "pending",
+      latency: 0,
+    },
   ]);
 
   const getDeviceIcon = (type: string) => {
     switch (type) {
-      case 'phone':
-        return 'phone-portrait';
-      case 'tablet':
-        return 'tablet-portrait';
-      case 'laptop':
-        return 'laptop';
+      case "phone":
+        return "phone-portrait";
+      case "tablet":
+        return "tablet-portrait";
+      case "laptop":
+        return "laptop";
       default:
-        return 'hardware-chip';
+        return "hardware-chip";
     }
   };
 
   const getStatusColor = (status: string) => {
     switch (status) {
-      case 'connected':
+      case "connected":
         return theme.colors.neon.green;
-      case 'pending':
+      case "pending":
         return theme.colors.neon.yellow;
-      case 'disconnected':
+      case "disconnected":
         return theme.colors.error;
       default:
         return theme.colors.text.secondary;
@@ -55,7 +84,13 @@ export default function DeviceListModal() {
                   Connected Devices
                 </AppText>
                 <IconButton
-                  icon={<Ionicons name="close" size={24} color={theme.colors.white} />}
+                  icon={
+                    <Ionicons
+                      name="close"
+                      size={24}
+                      color={theme.colors.white}
+                    />
+                  }
                   variant="ghost"
                   size="md"
                   onPress={() => router.back()}
@@ -74,7 +109,11 @@ export default function DeviceListModal() {
             >
               <View style={styles.devicesList}>
                 {devices.map((device) => (
-                  <GlassCard key={device.id} intensity="heavy" style={styles.deviceCard}>
+                  <GlassCard
+                    key={device.id}
+                    intensity="heavy"
+                    style={styles.deviceCard}
+                  >
                     <View style={styles.deviceRow}>
                       <View style={styles.deviceIconContainer}>
                         <Ionicons
@@ -92,18 +131,20 @@ export default function DeviceListModal() {
                           <View
                             style={[
                               styles.statusDot,
-                              { backgroundColor: getStatusColor(device.status) },
+                              {
+                                backgroundColor: getStatusColor(device.status),
+                              },
                             ]}
                           />
                           <AppText variant="caption">
-                            {device.status === 'connected'
+                            {device.status === "connected"
                               ? `${device.latency}ms latency`
-                              : 'Connecting...'}
+                              : "Connecting..."}
                           </AppText>
                         </View>
                       </View>
 
-                      {device.status === 'connected' && (
+                      {device.status === "connected" && (
                         <IconButton
                           icon={
                             <Ionicons
@@ -114,7 +155,9 @@ export default function DeviceListModal() {
                           }
                           variant="ghost"
                           size="sm"
-                          onPress={() => console.log('Device options', device.id)}
+                          onPress={() =>
+                            console.log("Device options", device.id)
+                          }
                         />
                       )}
                     </View>
@@ -131,7 +174,11 @@ export default function DeviceListModal() {
                 <GlassCard intensity="medium">
                   <View style={styles.statsGrid}>
                     <View style={styles.statItem}>
-                      <Ionicons name="checkmark-circle" size={24} color={theme.colors.neon.green} />
+                      <Ionicons
+                        name="checkmark-circle"
+                        size={24}
+                        color={theme.colors.neon.green}
+                      />
                       <AppText variant="h3" weight="bold">
                         3
                       </AppText>
@@ -141,7 +188,11 @@ export default function DeviceListModal() {
                     <View style={styles.statDivider} />
 
                     <View style={styles.statItem}>
-                      <Ionicons name="time" size={24} color={theme.colors.neon.yellow} />
+                      <Ionicons
+                        name="time"
+                        size={24}
+                        color={theme.colors.neon.yellow}
+                      />
                       <AppText variant="h3" weight="bold">
                         1
                       </AppText>
@@ -151,7 +202,11 @@ export default function DeviceListModal() {
                     <View style={styles.statDivider} />
 
                     <View style={styles.statItem}>
-                      <Ionicons name="flash" size={24} color={theme.colors.neon.cyan} />
+                      <Ionicons
+                        name="flash"
+                        size={24}
+                        color={theme.colors.neon.cyan}
+                      />
                       <AppText variant="h3" weight="bold">
                         10ms
                       </AppText>
@@ -164,13 +219,18 @@ export default function DeviceListModal() {
               {/* Info Card */}
               <GlassCard intensity="light" style={styles.infoCard}>
                 <View style={styles.infoRow}>
-                  <Ionicons name="information-circle" size={24} color={theme.colors.neon.purple} />
+                  <Ionicons
+                    name="information-circle"
+                    size={24}
+                    color={theme.colors.neon.purple}
+                  />
                   <View style={styles.infoText}>
                     <AppText variant="body" weight="semibold">
                       Device Sync
                     </AppText>
                     <AppText variant="caption">
-                      All devices are automatically synchronized for seamless playback
+                      All devices are automatically synchronized for seamless
+                      playback
                     </AppText>
                   </View>
                 </View>
@@ -185,7 +245,7 @@ export default function DeviceListModal() {
                 size="md"
                 fullWidth
                 icon={<Ionicons name="refresh" size={20} color="white" />}
-                onPress={() => console.log('Refresh')}
+                onPress={() => console.log("Refresh")}
               />
             </View>
           </View>
@@ -198,11 +258,11 @@ export default function DeviceListModal() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: "rgba(0, 0, 0, 0.5)",
   },
   blur: {
     flex: 1,
-    paddingTop: Platform.OS === 'ios' ? 60 : 40,
+    paddingTop: Platform.OS === "ios" ? 60 : 40,
   },
   content: {
     flex: 1,
@@ -212,9 +272,9 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.xl,
   },
   headerTop: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
+    flexDirection: "row",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: theme.spacing.sm,
   },
   scrollView: {
@@ -231,8 +291,8 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
   },
   deviceRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing.md,
   },
   deviceIconContainer: {
@@ -240,16 +300,16 @@ const styles = StyleSheet.create({
     height: 56,
     borderRadius: theme.borderRadius.md,
     backgroundColor: theme.colors.glass.medium,
-    justifyContent: 'center',
-    alignItems: 'center',
+    justifyContent: "center",
+    alignItems: "center",
   },
   deviceInfo: {
     flex: 1,
     gap: theme.spacing.xs,
   },
   deviceMeta: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing.xs,
   },
   statusDot: {
@@ -264,12 +324,12 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   statsGrid: {
-    flexDirection: 'row',
-    justifyContent: 'space-around',
+    flexDirection: "row",
+    justifyContent: "space-around",
     paddingVertical: theme.spacing.md,
   },
   statItem: {
-    alignItems: 'center',
+    alignItems: "center",
     gap: theme.spacing.xs,
   },
   statDivider: {
@@ -280,8 +340,8 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.lg,
   },
   infoRow: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
+    flexDirection: "row",
+    alignItems: "flex-start",
     gap: theme.spacing.md,
   },
   infoText: {
