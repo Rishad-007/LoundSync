@@ -11,107 +11,45 @@ import {
   GradientButton,
   IconButton,
 } from "../../src/components";
+import {
+  useIsHost,
+  useLocalDevice,
+  useMembers,
+  useSessionActions,
+} from "../../src/state";
 import { theme } from "../../src/theme";
 
 export default function DeviceListModal() {
   const router = useRouter();
-  const [isHost] = useState(true); // Mock host status
-  const [devices, setDevices] = useState([
-    {
-      id: "1",
-      name: "You",
-      userName: "Alex",
-      deviceName: "iPhone 15 Pro",
-      type: "phone",
-      status: "connected",
-      latency: 8,
-      volume: 0.85,
-      isHost: true,
-    },
-    {
-      id: "2",
-      name: "John Doe",
-      userName: "John",
-      deviceName: "Samsung Galaxy S23",
-      type: "phone",
-      status: "connected",
-      latency: 12,
-      volume: 0.75,
-      isHost: false,
-    },
-    {
-      id: "3",
-      name: "Alex Smith",
-      userName: "Alex S",
-      deviceName: "iPad Pro",
-      type: "tablet",
-      status: "connected",
-      latency: 10,
-      volume: 0.9,
-      isHost: false,
-    },
-    {
-      id: "4",
-      name: "Sarah Johnson",
-      userName: "Sarah",
-      deviceName: "MacBook Pro",
-      type: "laptop",
-      status: "pending",
-      latency: 0,
-      volume: 0.0,
-      isHost: false,
-    },
-  ]);
+  const members = useMembers(); // Real members from Zustand
+  const isHost = useIsHost(); // Real host check
+  const sessionActions = useSessionActions();
+  const localDevice = useLocalDevice();
+
+  // Volume state (local only for now)
+  const [volumes, setVolumes] = useState<{ [key: string]: number }>({});
 
   // Slide-in animation for cards
-  const slideAnims = useRef(devices.map(() => new Animated.Value(50))).current;
-  const fadeAnims = useRef(devices.map(() => new Animated.Value(0))).current;
+  // Note: Using dynamic refs for list animation is tricky with changing lists
+  // Simplified for now to just animate in once
+  const fadeAnim = useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
-    const animations = devices.map((_, index) =>
-      Animated.parallel([
-        Animated.timing(slideAnims[index], {
-          toValue: 0,
-          duration: 400,
-          delay: index * 100,
-          useNativeDriver: true,
-        }),
-        Animated.timing(fadeAnims[index], {
-          toValue: 1,
-          duration: 400,
-          delay: index * 100,
-          useNativeDriver: true,
-        }),
-      ]),
-    );
-    Animated.stagger(50, animations).start();
+    Animated.timing(fadeAnim, {
+      toValue: 1,
+      duration: 400,
+      useNativeDriver: true,
+    }).start();
   }, []);
 
   const handleVolumeChange = (deviceId: string, newVolume: number) => {
-    setDevices((prevDevices) =>
-      prevDevices.map((device) =>
-        device.id === deviceId ? { ...device, volume: newVolume } : device,
-      ),
-    );
+    setVolumes((prev) => ({ ...prev, [deviceId]: newVolume }));
   };
 
   const handleKickDevice = (deviceId: string, deviceName: string) => {
-    // Animate out before removing
-    const index = devices.findIndex((d) => d.id === deviceId);
-    Animated.parallel([
-      Animated.timing(slideAnims[index], {
-        toValue: 100,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-      Animated.timing(fadeAnims[index], {
-        toValue: 0,
-        duration: 300,
-        useNativeDriver: true,
-      }),
-    ]).start(() => {
-      setDevices((prevDevices) => prevDevices.filter((d) => d.id !== deviceId));
-    });
+    // In a real app, you'd send a "kick" message via websocket
+    // For now, we'll just remove them locally
+    console.log("Kick device:", deviceId, deviceName);
   };
 
   const getLatencyColor = (latency: number) => {
@@ -191,92 +129,98 @@ export default function DeviceListModal() {
               showsVerticalScrollIndicator={false}
             >
               <View style={styles.devicesList}>
-                {devices.map((device, index) => (
-                  <Animated.View
-                    key={device.id}
-                    style={{
-                      transform: [{ translateY: slideAnims[index] }],
-                      opacity: fadeAnims[index],
-                    }}
-                  >
-                    <GlassCard intensity="heavy" style={styles.deviceCard}>
-                      {/* Device Header Row */}
-                      <View style={styles.deviceRow}>
-                        <View style={styles.deviceIconContainer}>
-                          <Ionicons
-                            name={getDeviceIcon(device.type) as any}
-                            size={32}
-                            color={theme.colors.neon.cyan}
-                          />
-                        </View>
+                {members.map((member, index) => {
+                  const isLocal = member.id === localDevice?.id;
+                  const latency = member.latency || 0;
+                  const volume = volumes[member.id] || 0.8; // Default volume
 
-                        <View style={styles.deviceInfo}>
-                          <View style={styles.deviceNameRow}>
-                            <AppText variant="body" weight="bold">
-                              {device.name}
+                  return (
+                    <Animated.View
+                      key={member.id}
+                      style={{ opacity: fadeAnim }}
+                    >
+                      <GlassCard intensity="heavy" style={styles.deviceCard}>
+                        {/* Device Header Row */}
+                        <View style={styles.deviceRow}>
+                          <View style={styles.deviceIconContainer}>
+                            <Ionicons
+                              name={
+                                member.role === "host"
+                                  ? "hardware-chip"
+                                  : "phone-portrait"
+                              }
+                              size={32}
+                              color={theme.colors.neon.cyan}
+                            />
+                          </View>
+
+                          <View style={styles.deviceInfo}>
+                            <View style={styles.deviceNameRow}>
+                              <AppText variant="body" weight="bold">
+                                {member.name} {isLocal && "(You)"}
+                              </AppText>
+                              {member.role === "host" && (
+                                <View style={styles.hostBadge}>
+                                  <Ionicons
+                                    name="star"
+                                    size={14}
+                                    color={theme.colors.neon.yellow}
+                                  />
+                                  <AppText
+                                    variant="caption"
+                                    weight="bold"
+                                    style={styles.hostText}
+                                  >
+                                    HOST
+                                  </AppText>
+                                </View>
+                              )}
+                            </View>
+                            <AppText
+                              variant="caption"
+                              color={theme.colors.text.secondary}
+                            >
+                              {member.address || "Unknown Device"}
                             </AppText>
-                            {device.isHost && (
-                              <View style={styles.hostBadge}>
+
+                            {/* Latency Badge */}
+                            {member.connectionStatus === "connected" && (
+                              <View style={styles.latencyBadge}>
                                 <Ionicons
-                                  name="star"
-                                  size={14}
-                                  color={theme.colors.neon.yellow}
+                                  name="speedometer"
+                                  size={12}
+                                  color={getLatencyColor(latency)}
                                 />
                                 <AppText
                                   variant="caption"
-                                  weight="bold"
-                                  style={styles.hostText}
+                                  style={[
+                                    styles.latencyText,
+                                    { color: getLatencyColor(latency) },
+                                  ]}
                                 >
-                                  HOST
+                                  {latency}ms • {getLatencyLabel(latency)}
+                                </AppText>
+                              </View>
+                            )}
+
+                            {(member.connectionStatus === "reconnecting" ||
+                              member.connectionStatus === "disconnected") && (
+                              <View style={styles.pendingBadge}>
+                                <View style={styles.pendingDot} />
+                                <AppText
+                                  variant="caption"
+                                  color={theme.colors.neon.yellow}
+                                >
+                                  {member.connectionStatus === "reconnecting"
+                                    ? "Reconnecting..."
+                                    : "Disconnected"}
                                 </AppText>
                               </View>
                             )}
                           </View>
-                          <AppText
-                            variant="caption"
-                            color={theme.colors.text.secondary}
-                          >
-                            {device.deviceName}
-                          </AppText>
 
-                          {/* Latency Badge */}
-                          {device.status === "connected" && (
-                            <View style={styles.latencyBadge}>
-                              <Ionicons
-                                name="speedometer"
-                                size={12}
-                                color={getLatencyColor(device.latency)}
-                              />
-                              <AppText
-                                variant="caption"
-                                style={[
-                                  styles.latencyText,
-                                  { color: getLatencyColor(device.latency) },
-                                ]}
-                              >
-                                {device.latency}ms •{" "}
-                                {getLatencyLabel(device.latency)}
-                              </AppText>
-                            </View>
-                          )}
-
-                          {device.status === "pending" && (
-                            <View style={styles.pendingBadge}>
-                              <View style={styles.pendingDot} />
-                              <AppText
-                                variant="caption"
-                                color={theme.colors.neon.yellow}
-                              >
-                                Connecting...
-                              </AppText>
-                            </View>
-                          )}
-                        </View>
-
-                        {/* Kick Button (Host Only) */}
-                        {isHost &&
-                          !device.isHost &&
-                          device.status === "connected" && (
+                          {/* Kick Button (Host Only, can't kick self) */}
+                          {isHost && !isLocal && (
                             <IconButton
                               icon={
                                 <Ionicons
@@ -288,61 +232,62 @@ export default function DeviceListModal() {
                               variant="ghost"
                               size="sm"
                               onPress={() =>
-                                handleKickDevice(device.id, device.name)
+                                handleKickDevice(member.id, member.name)
                               }
                             />
                           )}
-                      </View>
-
-                      {/* Volume Control per Device */}
-                      {device.status === "connected" && (
-                        <View style={styles.volumeSection}>
-                          <View style={styles.volumeHeader}>
-                            <Ionicons
-                              name="volume-medium"
-                              size={16}
-                              color={theme.colors.neon.purple}
-                            />
-                            <AppText variant="caption" weight="semibold">
-                              Device Volume
-                            </AppText>
-                          </View>
-                          <View style={styles.volumeControl}>
-                            <Ionicons
-                              name="volume-low"
-                              size={16}
-                              color={theme.colors.text.tertiary}
-                            />
-                            <Slider
-                              style={styles.volumeSlider}
-                              minimumValue={0}
-                              maximumValue={1}
-                              value={device.volume}
-                              onValueChange={(value) =>
-                                handleVolumeChange(device.id, value)
-                              }
-                              minimumTrackTintColor={theme.colors.neon.purple}
-                              maximumTrackTintColor={theme.colors.glass.light}
-                              thumbTintColor={theme.colors.neon.purple}
-                              disabled={!isHost && !device.isHost}
-                            />
-                            <Ionicons
-                              name="volume-high"
-                              size={16}
-                              color={theme.colors.text.tertiary}
-                            />
-                            <AppText
-                              variant="caption"
-                              style={styles.volumeValue}
-                            >
-                              {Math.round(device.volume * 100)}%
-                            </AppText>
-                          </View>
                         </View>
-                      )}
-                    </GlassCard>
-                  </Animated.View>
-                ))}
+
+                        {/* Volume Control per Device */}
+                        {member.connectionStatus === "connected" && (
+                          <View style={styles.volumeSection}>
+                            <View style={styles.volumeHeader}>
+                              <Ionicons
+                                name="volume-medium"
+                                size={16}
+                                color={theme.colors.neon.purple}
+                              />
+                              <AppText variant="caption" weight="semibold">
+                                Device Volume
+                              </AppText>
+                            </View>
+                            <View style={styles.volumeControl}>
+                              <Ionicons
+                                name="volume-low"
+                                size={16}
+                                color={theme.colors.text.tertiary}
+                              />
+                              <Slider
+                                style={styles.volumeSlider}
+                                minimumValue={0}
+                                maximumValue={1}
+                                value={volume}
+                                onValueChange={(value) =>
+                                  handleVolumeChange(member.id, value)
+                                }
+                                minimumTrackTintColor={theme.colors.neon.purple}
+                                maximumTrackTintColor={theme.colors.glass.light}
+                                thumbTintColor={theme.colors.neon.purple}
+                                disabled={!isHost}
+                              />
+                              <Ionicons
+                                name="volume-high"
+                                size={16}
+                                color={theme.colors.text.tertiary}
+                              />
+                              <AppText
+                                variant="caption"
+                                style={styles.volumeValue}
+                              >
+                                {Math.round(volume * 100)}%
+                              </AppText>
+                            </View>
+                          </View>
+                        )}
+                      </GlassCard>
+                    </Animated.View>
+                  );
+                })}
               </View>
 
               {/* Stats Section */}
@@ -367,7 +312,11 @@ export default function DeviceListModal() {
                         color={theme.colors.neon.green}
                       />
                       <AppText variant="h3" weight="bold">
-                        {devices.filter((d) => d.status === "connected").length}
+                        {
+                          members.filter(
+                            (m) => m.connectionStatus === "connected",
+                          ).length
+                        }
                       </AppText>
                       <AppText variant="caption">Active</AppText>
                     </View>
@@ -381,7 +330,11 @@ export default function DeviceListModal() {
                         color={theme.colors.neon.yellow}
                       />
                       <AppText variant="h3" weight="bold">
-                        {devices.filter((d) => d.status === "pending").length}
+                        {
+                          members.filter(
+                            (m) => m.connectionStatus === "reconnecting",
+                          ).length
+                        }
                       </AppText>
                       <AppText variant="caption">Pending</AppText>
                     </View>
@@ -396,11 +349,12 @@ export default function DeviceListModal() {
                       />
                       <AppText variant="h3" weight="bold">
                         {Math.round(
-                          devices
-                            .filter((d) => d.status === "connected")
-                            .reduce((sum, d) => sum + d.latency, 0) /
-                            devices.filter((d) => d.status === "connected")
-                              .length,
+                          members
+                            .filter((m) => m.connectionStatus === "connected")
+                            .reduce((sum, m) => sum + (m.latency || 0), 0) /
+                            members.filter(
+                              (m) => m.connectionStatus === "connected",
+                            ).length || 1,
                         )}
                         ms
                       </AppText>

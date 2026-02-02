@@ -30,10 +30,18 @@ export type SessionSlice = SessionState & SessionActions;
 
 /**
  * Generate a unique session ID
+ * Format: XXX-XXX (e.g., "A1B-2C3")
  */
 const generateSessionId = (): string => {
-  return `session_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
-};
+  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789"; // Removed similar looking characters
+  let part1 = "";
+  let part2 = "";
+  for (let i = 0; i < 3; i++) {
+    part1 += chars.charAt(Math.floor(Math.random() * chars.length));
+    part2 += chars.charAt(Math.floor(Math.random() * chars.length));
+  }
+  return `${part1}-${part2}`;
+}; // TODO: Check for collisions against existing sessions
 
 /**
  * Mock discovered sessions for testing
@@ -126,10 +134,7 @@ export const createSessionSlice: StateCreator<
       // Register session in registry (required before starting server)
       sessionRegistry.registerSession({
         sessionId: session.id,
-        sessionCode: session.id
-          .replace("session_", "")
-          .substring(0, 6)
-          .toUpperCase(), // Temp code from ID
+        sessionCode: session.id,
         sessionName: session.name,
         hostId: localDevice.id,
         hostName: localDevice.name,

@@ -78,6 +78,8 @@ export default function PlayerRoomScreen() {
   const colorPulse = useSharedValue(0);
 
   // Redirect if no session
+
+  // Redirect if no session
   useEffect(() => {
     if (!session && sessionStatus === "idle") {
       console.log("[PlayerRoom] No active session, redirecting to home");
@@ -185,15 +187,9 @@ export default function PlayerRoomScreen() {
   const handleShareSession = async () => {
     if (!session) return;
 
-    // Format session code as XXX-XXX
-    const sessionCode =
-      session.id.length === 6
-        ? `${session.id.slice(0, 3)}-${session.id.slice(3, 6)}`
-        : session.id;
-
     try {
       await Share.share({
-        message: `Join my LOUDSYNC party "${session.name}"! 🎵\nCode: ${sessionCode}\n\nMake sure you're on the same WiFi network!`,
+        message: `Join my LOUDSYNC party "${session.name}"! 🎵\nCode: ${session.id}\n\nMake sure you're on the same WiFi network!`,
       });
     } catch (error) {
       console.log(error);
@@ -335,7 +331,7 @@ export default function PlayerRoomScreen() {
                     weight="bold"
                     color={theme.colors.neon.cyan}
                   >
-                    {session?.id || "N/A"}
+                    {session ? session.id : "N/A"}
                   </AppText>
                   <Ionicons
                     name="share-outline"

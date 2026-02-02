@@ -62,15 +62,6 @@ export default function CreateSessionScreen() {
     });
   };
 
-  const generateSessionCode = (): string => {
-    // Generate 6-character alphanumeric code in XXX-XXX format
-    const chars = "ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789";
-    let code = "";
-    for (let i = 0; i < 6; i++) {
-      code += chars.charAt(Math.floor(Math.random() * chars.length));
-    }
-    return `${code.slice(0, 3)}-${code.slice(3, 6)}`;
-  };
 
   const handleCreateSession = async () => {
     try {
