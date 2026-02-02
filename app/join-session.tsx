@@ -2,8 +2,9 @@ import { Ionicons } from "@expo/vector-icons";
 import { LinearGradient } from "expo-linear-gradient";
 import { useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
-import React, { useState } from "react";
+import React, { useEffect, useRef, useState } from "react";
 import {
+  Animated,
   KeyboardAvoidingView,
   Platform,
   ScrollView,
@@ -22,6 +23,55 @@ import { theme } from "../src/theme";
 export default function JoinSessionScreen() {
   const router = useRouter();
   const [sessionCode, setSessionCode] = useState("");
+  const [isScanning, setIsScanning] = useState(true);
+  const radarRotation = useRef(new Animated.Value(0)).current;
+  const pulseAnim = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    // Radar rotation animation
+    Animated.loop(
+      Animated.timing(radarRotation, {
+        toValue: 1,
+        duration: 3000,
+        useNativeDriver: true,
+      }),
+    ).start();
+
+    // Pulse animation
+    Animated.loop(
+      Animated.sequence([
+        Animated.timing(pulseAnim, {
+          toValue: 1,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+        Animated.timing(pulseAnim, {
+          toValue: 0,
+          duration: 1500,
+          useNativeDriver: true,
+        }),
+      ]),
+    ).start();
+
+    // Simulate scanning completion
+    const timer = setTimeout(() => setIsScanning(false), 5000);
+    return () => clearTimeout(timer);
+  }, []);
+
+  const radarRotate = radarRotation.interpolate({
+    inputRange: [0, 1],
+    outputRange: ["0deg", "360deg"],
+  });
+
+  const pulseScale = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.2],
+  });
+
+  const pulseOpacity = pulseAnim.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.5, 0],
+  });
 
   const handleJoinSession = () => {
     if (!sessionCode.trim()) {
@@ -84,12 +134,237 @@ export default function JoinSessionScreen() {
                 Join Session
               </AppText>
               <AppText variant="body" color={theme.colors.text.secondary}>
-                Enter the session code to join
+                Scan nearby or enter code
               </AppText>
             </View>
 
-            {/* Code Input */}
+            {/* Animated Radar Scanner */}
+            <View style={styles.radarSection}>
+              <GlassCard intensity="heavy" style={styles.radarCard}>
+                <LinearGradient
+                  colors={[...theme.gradients.electric, "transparent"]}
+                  start={{ x: 0, y: 0 }}
+                  end={{ x: 1, y: 1 }}
+                  style={styles.radarGradient}
+                />
+                <View style={styles.radarContainer}>
+                  {/* Pulse circles */}
+                  <Animated.View
+                    style={[
+                      styles.radarPulse,
+                      {
+                        transform: [{ scale: pulseScale }],
+                        opacity: pulseOpacity,
+                      },
+                    ]}
+                  />
+                  <View style={styles.radarCircle} />
+                  <View style={[styles.radarCircle, styles.radarCircleMid]} />
+                  <View style={[styles.radarCircle, styles.radarCircleInner]} />
+
+                  {/* Rotating scan line */}
+                  <Animated.View
+                    style={[
+                      styles.radarScanLine,
+                      { transform: [{ rotate: radarRotate }] },
+                    ]}
+                  >
+                    <LinearGradient
+                      colors={[
+                        "transparent",
+                        theme.colors.neon.cyan + "80",
+                        "transparent",
+                      ]}
+                      start={{ x: 0, y: 0 }}
+                      end={{ x: 1, y: 0 }}
+                      style={styles.radarScanGradient}
+                    />
+                  </Animated.View>
+
+                  {/* Center icon */}
+                  <View style={styles.radarCenter}>
+                    <Ionicons
+                      name="radio"
+                      size={32}
+                      color={theme.colors.neon.cyan}
+                    />
+                  </View>
+                </View>
+                <AppText variant="body" weight="semibold" center>
+                  {isScanning ? "Scanning nearby sessions..." : "Scan Complete"}
+                </AppText>
+                {!isScanning && (
+                  <AppText
+                    variant="caption"
+                    center
+                    color={theme.colors.neon.green}
+                  >
+                    3 sessions found
+                  </AppText>
+                )}
+              </GlassCard>
+            </View>
+
+            {/* Nearby Sessions */}
+            {!isScanning && (
+              <View style={styles.nearbySection}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons
+                    name="wifi"
+                    size={20}
+                    color={theme.colors.neon.cyan}
+                  />
+                  <AppText variant="h4" weight="bold">
+                    Nearby Sessions
+                  </AppText>
+                </View>
+
+                <GlassCard intensity="medium" style={styles.sessionCard}>
+                  <LinearGradient
+                    colors={[...theme.gradients.party, "transparent"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sessionGradient}
+                  />
+                  <View style={styles.sessionHeader}>
+                    <View style={styles.sessionIconLarge}>
+                      <Ionicons
+                        name="headset"
+                        size={28}
+                        color={theme.colors.neon.pink}
+                      />
+                    </View>
+                    <View style={styles.sessionInfo}>
+                      <AppText variant="body" weight="bold">
+                        Friday Night Party 🎉
+                      </AppText>
+                      <AppText variant="caption">
+                        Host: Alex • 5 devices connected
+                      </AppText>
+                      <View style={styles.sessionMeta}>
+                        <View style={styles.signalBadge}>
+                          <Ionicons
+                            name="radio"
+                            size={12}
+                            color={theme.colors.neon.green}
+                          />
+                          <AppText variant="caption" style={styles.signalText}>
+                            Strong
+                          </AppText>
+                        </View>
+                      </View>
+                    </View>
+                    <GradientButton
+                      title="Join"
+                      gradient="secondary"
+                      size="sm"
+                      onPress={() => handleJoinSession()}
+                    />
+                  </View>
+                </GlassCard>
+
+                <GlassCard intensity="medium" style={styles.sessionCard}>
+                  <LinearGradient
+                    colors={[...theme.gradients.sunset, "transparent"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sessionGradient}
+                  />
+                  <View style={styles.sessionHeader}>
+                    <View style={styles.sessionIconLarge}>
+                      <Ionicons
+                        name="disc"
+                        size={28}
+                        color={theme.colors.neon.orange}
+                      />
+                    </View>
+                    <View style={styles.sessionInfo}>
+                      <AppText variant="body" weight="bold">
+                        Chill Vibes Session
+                      </AppText>
+                      <AppText variant="caption">
+                        Host: Sam • 3 devices connected
+                      </AppText>
+                      <View style={styles.sessionMeta}>
+                        <View style={styles.signalBadge}>
+                          <Ionicons
+                            name="radio"
+                            size={12}
+                            color={theme.colors.neon.yellow}
+                          />
+                          <AppText variant="caption" style={styles.signalText}>
+                            Medium
+                          </AppText>
+                        </View>
+                      </View>
+                    </View>
+                    <GradientButton
+                      title="Join"
+                      gradient="sunset"
+                      size="sm"
+                      onPress={() => handleJoinSession()}
+                    />
+                  </View>
+                </GlassCard>
+
+                <GlassCard intensity="medium" style={styles.sessionCard}>
+                  <LinearGradient
+                    colors={[...theme.gradients.lime, "transparent"]}
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.sessionGradient}
+                  />
+                  <View style={styles.sessionHeader}>
+                    <View style={styles.sessionIconLarge}>
+                      <Ionicons
+                        name="fitness"
+                        size={28}
+                        color={theme.colors.neon.green}
+                      />
+                    </View>
+                    <View style={styles.sessionInfo}>
+                      <AppText variant="body" weight="bold">
+                        Workout Beats
+                      </AppText>
+                      <AppText variant="caption">
+                        Host: Jordan • 2 devices connected
+                      </AppText>
+                      <View style={styles.sessionMeta}>
+                        <View style={styles.signalBadge}>
+                          <Ionicons
+                            name="radio"
+                            size={12}
+                            color={theme.colors.neon.green}
+                          />
+                          <AppText variant="caption" style={styles.signalText}>
+                            Strong
+                          </AppText>
+                        </View>
+                      </View>
+                    </View>
+                    <GradientButton
+                      title="Join"
+                      gradient="lime"
+                      size="sm"
+                      onPress={() => handleJoinSession()}
+                    />
+                  </View>
+                </GlassCard>
+              </View>
+            )}
+
+            {/* Manual Code Input */}
             <View style={styles.codeInputSection}>
+              <View style={styles.sectionHeader}>
+                <Ionicons
+                  name="keypad"
+                  size={20}
+                  color={theme.colors.neon.purple}
+                />
+                <AppText variant="h4" weight="bold">
+                  Enter Code Manually
+                </AppText>
+              </View>
               <LinearGradient
                 colors={theme.gradients.electric}
                 start={{ x: 0, y: 0 }}
@@ -111,16 +386,27 @@ export default function JoinSessionScreen() {
                   />
                 </View>
               </LinearGradient>
-              <AppText variant="caption" center>
+              <AppText
+                variant="caption"
+                center
+                color={theme.colors.text.tertiary}
+              >
                 Get the code from your session host
               </AppText>
             </View>
 
-            {/* Quick Join Section */}
+            {/* Recent Sessions */}
             <View style={styles.quickJoinSection}>
-              <AppText variant="h4" style={styles.sectionTitle}>
-                Recent Sessions
-              </AppText>
+              <View style={styles.sectionHeader}>
+                <Ionicons
+                  name="time"
+                  size={20}
+                  color={theme.colors.neon.pink}
+                />
+                <AppText variant="h4" weight="bold">
+                  Recent Sessions
+                </AppText>
+              </View>
 
               <GlassCard intensity="medium" style={styles.sessionCard}>
                 <View style={styles.sessionHeader}>
@@ -240,21 +526,99 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing["2xl"],
   },
   header: {
-    marginBottom: theme.spacing["2xl"],
+    marginBottom: theme.spacing.xl,
   },
   backButton: {
     alignSelf: "flex-start",
     marginBottom: theme.spacing.md,
   },
-  codeInputSection: {
+  radarSection: {
+    marginBottom: theme.spacing.xl,
+  },
+  radarCard: {
+    overflow: "hidden",
+    paddingVertical: theme.spacing.xl,
+  },
+  radarGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.05,
+  },
+  radarContainer: {
+    width: 200,
+    height: 200,
+    alignSelf: "center",
+    marginBottom: theme.spacing.md,
+    justifyContent: "center",
     alignItems: "center",
-    marginBottom: theme.spacing["2xl"],
+  },
+  radarCircle: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    borderWidth: 1,
+    borderColor: theme.colors.neon.cyan + "30",
+  },
+  radarCircleMid: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
+  },
+  radarCircleInner: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+  },
+  radarPulse: {
+    position: "absolute",
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    backgroundColor: theme.colors.neon.cyan,
+  },
+  radarScanLine: {
+    position: "absolute",
+    width: 100,
+    height: 2,
+    left: 100,
+    top: 99,
+  },
+  radarScanGradient: {
+    width: "100%",
+    height: "100%",
+  },
+  radarCenter: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: theme.colors.background.tertiary,
+    justifyContent: "center",
+    alignItems: "center",
+    borderWidth: 2,
+    borderColor: theme.colors.neon.cyan,
+  },
+  nearbySection: {
+    marginBottom: theme.spacing.xl,
+  },
+  sectionHeader: {
+    flexDirection: "row",
+    alignItems: "center",
     gap: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+  },
+  codeInputSection: {
+    marginBottom: theme.spacing.xl,
   },
   codeInputGradient: {
     borderRadius: theme.borderRadius.lg,
     padding: 3,
     width: "100%",
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
   },
   codeInputInner: {
     backgroundColor: theme.colors.background.tertiary,
@@ -271,11 +635,17 @@ const styles = StyleSheet.create({
   quickJoinSection: {
     marginBottom: theme.spacing.xl,
   },
-  sectionTitle: {
-    marginBottom: theme.spacing.md,
-  },
   sessionCard: {
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
+    overflow: "hidden",
+  },
+  sessionGradient: {
+    position: "absolute",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    opacity: 0.08,
   },
   sessionHeader: {
     flexDirection: "row",
@@ -290,9 +660,35 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
   },
+  sessionIconLarge: {
+    width: 56,
+    height: 56,
+    borderRadius: theme.borderRadius.md,
+    backgroundColor: theme.colors.glass.medium,
+    justifyContent: "center",
+    alignItems: "center",
+  },
   sessionInfo: {
     flex: 1,
     gap: theme.spacing.xs,
+  },
+  sessionMeta: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.xs,
+  },
+  signalBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs,
+    backgroundColor: theme.colors.glass.light,
+    paddingHorizontal: theme.spacing.sm,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.sm,
+  },
+  signalText: {
+    fontSize: 11,
   },
   infoCard: {
     marginBottom: theme.spacing.xl,
