@@ -3,13 +3,9 @@
  * Orchestrates mDNS + UDP with deduplication, timeout, and expiry handling
  */
 
-import { mdnsService } from './mdnsDiscovery';
-import { udpService } from './udpDiscovery';
-import type {
-  DiscoveredSessionData,
-  SessionAdvertisement,
-  DiscoveryOptions,
-} from './types';
+import { mdnsService } from "./mdnsDiscovery";
+import type { DiscoveredSessionData, DiscoveryOptions } from "./types";
+import { udpService } from "./udpDiscovery";
 
 /**
  * Session with expiry tracking
@@ -38,7 +34,7 @@ export class DiscoveryManager {
    */
   async startDiscovery(options: DiscoveryOptions = {}): Promise<void> {
     if (this.isScanning) {
-      console.warn('[DiscoveryManager] Scan already in progress');
+      console.warn("[DiscoveryManager] Scan already in progress");
       return;
     }
 
@@ -46,15 +42,15 @@ export class DiscoveryManager {
     this.sessions.clear();
     this.startExpiryCheck();
 
-    console.log('[DiscoveryManager] Starting discovery...');
+    console.log("[DiscoveryManager] Starting discovery...");
 
-    const method = options.method || 'mdns';
+    const method = options.method || "mdns";
     const useFallback = options.useFallback !== false;
 
     try {
-      if (method === 'mdns') {
+      if (method === "mdns") {
         await this.runMDNSDiscovery(options);
-      } else if (method === 'udp') {
+      } else if (method === "udp") {
         await this.runUDPDiscovery(options);
       } else {
         // Default: try mDNS first, fall back to UDP
@@ -62,7 +58,7 @@ export class DiscoveryManager {
           await this.runMDNSDiscovery(options);
         } catch (error) {
           if (useFallback) {
-            console.log('[DiscoveryManager] mDNS failed, trying UDP fallback');
+            console.log("[DiscoveryManager] mDNS failed, trying UDP fallback");
             await this.runUDPDiscovery(options);
           } else {
             throw error;
@@ -70,12 +66,26 @@ export class DiscoveryManager {
         }
       }
 
-      console.log(`[DiscoveryManager] Discovery complete. Found ${this.sessions.size} sessions`);
+      console.log(
+        `[DiscoveryManager] Discovery complete. Found ${this.sessions.size} sessions`,
+      );
     } catch (error) {
-      console.error('[DiscoveryManager] Discovery failed:', error);
+      console.error("[DiscoveryManager] Discovery failed:", error);
       this.isScanning = false;
       this.stopExpiryCheck();
-      throw error;
+
+      // Don't throw if it's just a native module issue - UDP will be used as fallback
+      if (useFallback && method !== "udp") {
+        console.log("[DiscoveryManager] Attempting UDP fallback...");
+        try {
+          await this.runUDPDiscovery(options);
+        } catch (udpError) {
+          console.error(
+            "[DiscoveryManager] UDP fallback also failed:",
+            udpError,
+          );
+        }
+      }
     }
   }
 
@@ -86,7 +96,7 @@ export class DiscoveryManager {
     await mdnsService.startScan(
       (session) => this.addSession(session),
       (sessionId) => this.removeSession(sessionId),
-      options
+      options,
     );
   }
 
@@ -97,7 +107,7 @@ export class DiscoveryManager {
     await udpService.startScan(
       (session) => this.addSession(session),
       (sessionId) => this.removeSession(sessionId),
-      options
+      options,
     );
   }
 
@@ -114,8 +124,11 @@ export class DiscoveryManager {
       cached.expiresAt = Date.now() + this.sessionExpiryMs;
 
       // Update signal strength if this method is more reliable
-      if (data.discoveryMethod === 'mdns' && cached.data.discoveryMethod === 'udp') {
-        cached.data.discoveryMethod = 'mdns';
+      if (
+        data.discoveryMethod === "mdns" &&
+        cached.data.discoveryMethod === "udp"
+      ) {
+        cached.data.discoveryMethod = "mdns";
         cached.data.signalStrength = 100;
       }
 
@@ -123,7 +136,9 @@ export class DiscoveryManager {
     }
 
     // New session
-    console.log(`[DiscoveryManager] New session: ${sessionId} (${data.advertisement.sessionName})`);
+    console.log(
+      `[DiscoveryManager] New session: ${sessionId} (${data.advertisement.sessionName})`,
+    );
 
     this.sessions.set(sessionId, {
       data,
@@ -184,7 +199,7 @@ export class DiscoveryManager {
   stopDiscovery(): void {
     if (!this.isScanning) return;
 
-    console.log('[DiscoveryManager] Stopping discovery');
+    console.log("[DiscoveryManager] Stopping discovery");
 
     mdnsService.stopScan();
     udpService.stopScan();
@@ -212,7 +227,7 @@ export class DiscoveryManager {
    */
   subscribe(
     onFound: (session: DiscoveredSessionData) => void,
-    onLost: (sessionId: string) => void
+    onLost: (sessionId: string) => void,
   ): () => void {
     const listener = { onFound, onLost };
     this.listeners.push(listener);

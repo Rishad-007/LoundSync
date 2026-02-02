@@ -3,15 +3,15 @@
  * Advertises session on LAN for discovery
  */
 
-import UDP, { type DatagramSocket } from 'react-native-udp';
-import { Zeroconf } from 'react-native-zeroconf';
-import type { SessionAdvertisement, BroadcastOptions } from './types';
+import UDP, { type DatagramSocket } from "react-native-udp";
+import Zeroconf from "react-native-zeroconf";
+import type { BroadcastOptions, SessionAdvertisement } from "./types";
 
 const UDP_BROADCAST_PORT = 9876;
-const BROADCAST_ADDRESS = '255.255.255.255';
-const RESPONSE_PREFIX = 'LOUDSYNC_RESPONSE:';
-const LOUDSYNC_SERVICE_TYPE = '_loudsync._tcp';
-const LOUDSYNC_DOMAIN = '.local.';
+const BROADCAST_ADDRESS = "255.255.255.255";
+const RESPONSE_PREFIX = "LOUDSYNC_RESPONSE:";
+const LOUDSYNC_SERVICE_TYPE = "_loudsync._tcp";
+const LOUDSYNC_DOMAIN = ".local.";
 
 /**
  * Host Broadcast Service
@@ -23,7 +23,7 @@ export class HostBroadcastService {
   private isBroadcasting = false;
   private broadcastInterval: ReturnType<typeof setInterval> | null = null;
   private advertisement: SessionAdvertisement | null = null;
-  private localIP: string = '0.0.0.0';
+  private localIP: string = "0.0.0.0";
 
   /**
    * Start broadcasting session
@@ -31,10 +31,10 @@ export class HostBroadcastService {
   async startBroadcast(
     advertisement: SessionAdvertisement,
     localIP: string,
-    options: BroadcastOptions = {}
+    options: BroadcastOptions = {},
   ): Promise<void> {
     if (this.isBroadcasting) {
-      console.warn('[HostBroadcast] Already broadcasting');
+      console.warn("[HostBroadcast] Already broadcasting");
       return;
     }
 
@@ -45,7 +45,9 @@ export class HostBroadcastService {
     this.localIP = localIP;
     this.isBroadcasting = true;
 
-    console.log(`[HostBroadcast] Starting broadcast for session: ${advertisement.sessionId}`);
+    console.log(
+      `[HostBroadcast] Starting broadcast for session: ${advertisement.sessionId}`,
+    );
 
     try {
       // Setup mDNS advertisement
@@ -54,7 +56,7 @@ export class HostBroadcastService {
       // Setup UDP broadcast as fallback
       this.startUDPBroadcast(advertisement, interval);
     } catch (error) {
-      console.error('[HostBroadcast] Setup failed:', error);
+      console.error("[HostBroadcast] Setup failed:", error);
       this.isBroadcasting = false;
       throw error;
     }
@@ -65,10 +67,11 @@ export class HostBroadcastService {
    */
   private async startMDNSAdvertisement(
     advertisement: SessionAdvertisement,
-    port: number
+    port: number,
   ): Promise<void> {
     try {
       this.zeroconf = new Zeroconf();
+      if (!this.zeroconf) throw new Error("Zeroconf init failed");
 
       const serviceName = `loudsync-${advertisement.sessionId}`;
       const addresses = [this.localIP];
@@ -89,15 +92,18 @@ export class HostBroadcastService {
         name: serviceName,
         type: LOUDSYNC_SERVICE_TYPE,
         domain: LOUDSYNC_DOMAIN,
-        protocol: 'tcp',
+        protocol: "tcp",
         port,
         addresses,
         txt: txtRecord,
       });
 
-      console.log('[HostBroadcast] mDNS service registered');
+      console.log("[HostBroadcast] mDNS service registered");
     } catch (error) {
-      console.warn('[HostBroadcast] mDNS registration failed (UDP will be used):', error);
+      console.warn(
+        "[HostBroadcast] mDNS registration failed (UDP will be used):",
+        error,
+      );
     }
   }
 
@@ -106,26 +112,31 @@ export class HostBroadcastService {
    */
   private startUDPBroadcast(
     advertisement: SessionAdvertisement,
-    interval: number
+    interval: number,
   ): void {
     try {
+      if (!UDP) {
+        console.warn("[HostBroadcast] UDP module not available");
+        return;
+      }
+
       this.udpSocket = UDP.createSocket({
-        type: 'udp4',
+        type: "udp4",
       });
 
       // Listen for discovery requests
-      this.udpSocket.on('message', (msg: Buffer, rinfo: any) => {
+      this.udpSocket.on("message", (msg: Buffer, rinfo: any) => {
         const message = msg.toString();
-        if (message === 'LOUDSYNC_DISCOVER') {
+        if (message === "LOUDSYNC_DISCOVER") {
           this.sendUDPResponse(advertisement, rinfo.address);
         }
       });
 
-this.udpSocket.on('error', (error: any) => {
-        console.error('[HostBroadcast] UDP error:', error);
+      this.udpSocket.on("error", (error: any) => {
+        console.error("[HostBroadcast] UDP error:", error);
       });
 
-      this.udpSocket.bind(UDP_BROADCAST_PORT, '0.0.0.0', () => {
+      this.udpSocket.bind(UDP_BROADCAST_PORT, "0.0.0.0", () => {
         this.udpSocket?.setBroadcast(true);
 
         // Proactive broadcast every interval
@@ -133,10 +144,10 @@ this.udpSocket.on('error', (error: any) => {
           this.sendProactiveBroadcast(advertisement);
         }, interval);
 
-        console.log('[HostBroadcast] UDP broadcast started');
+        console.log("[HostBroadcast] UDP broadcast started");
       });
     } catch (error) {
-      console.error('[HostBroadcast] UDP setup failed:', error);
+      console.error("[HostBroadcast] UDP setup failed:", error);
     }
   }
 
@@ -145,10 +156,12 @@ this.udpSocket.on('error', (error: any) => {
    */
   private sendUDPResponse(
     advertisement: SessionAdvertisement,
-    targetAddress: string
+    targetAddress: string,
   ): void {
     try {
-      const message = Buffer.from(RESPONSE_PREFIX + JSON.stringify(advertisement));
+      const message = Buffer.from(
+        RESPONSE_PREFIX + JSON.stringify(advertisement),
+      );
 
       this.udpSocket?.send(
         message,
@@ -158,12 +171,12 @@ this.udpSocket.on('error', (error: any) => {
         targetAddress,
         (error: any) => {
           if (error) {
-            console.error('[HostBroadcast] Response send error:', error);
+            console.error("[HostBroadcast] Response send error:", error);
           }
-        }
+        },
       );
     } catch (error) {
-      console.error('[HostBroadcast] Error sending response:', error);
+      console.error("[HostBroadcast] Error sending response:", error);
     }
   }
 
@@ -172,7 +185,9 @@ this.udpSocket.on('error', (error: any) => {
    */
   private sendProactiveBroadcast(advertisement: SessionAdvertisement): void {
     try {
-      const message = Buffer.from(RESPONSE_PREFIX + JSON.stringify(advertisement));
+      const message = Buffer.from(
+        RESPONSE_PREFIX + JSON.stringify(advertisement),
+      );
 
       this.udpSocket?.send(
         message,
@@ -182,12 +197,12 @@ this.udpSocket.on('error', (error: any) => {
         BROADCAST_ADDRESS,
         (error: any) => {
           if (error) {
-            console.error('[HostBroadcast] Broadcast error:', error);
+            console.error("[HostBroadcast] Broadcast error:", error);
           }
-        }
+        },
       );
     } catch (error) {
-      console.error('[HostBroadcast] Error sending broadcast:', error);
+      console.error("[HostBroadcast] Error sending broadcast:", error);
     }
   }
 
@@ -196,7 +211,7 @@ this.udpSocket.on('error', (error: any) => {
    */
   updateAdvertisement(advertisement: SessionAdvertisement): void {
     this.advertisement = advertisement;
-    console.log('[HostBroadcast] Advertisement updated');
+    console.log("[HostBroadcast] Advertisement updated");
   }
 
   /**
@@ -205,7 +220,7 @@ this.udpSocket.on('error', (error: any) => {
   stopBroadcast(): void {
     if (!this.isBroadcasting) return;
 
-    console.log('[HostBroadcast] Stopping broadcast');
+    console.log("[HostBroadcast] Stopping broadcast");
 
     if (this.broadcastInterval) clearInterval(this.broadcastInterval);
 
@@ -213,7 +228,7 @@ this.udpSocket.on('error', (error: any) => {
       this.udpSocket?.close();
       this.udpSocket = null;
     } catch (error) {
-      console.error('[HostBroadcast] Error closing UDP:', error);
+      console.error("[HostBroadcast] Error closing UDP:", error);
     }
 
     try {
@@ -225,7 +240,7 @@ this.udpSocket.on('error', (error: any) => {
       this.zeroconf?.stop();
       this.zeroconf = null;
     } catch (error) {
-      console.warn('[HostBroadcast] Error unregistering mDNS:', error);
+      console.warn("[HostBroadcast] Error unregistering mDNS:", error);
     }
 
     this.isBroadcasting = false;

@@ -5,6 +5,11 @@
  */
 
 import { StateCreator } from "zustand";
+import { discoveryManager, hostBroadcastService } from "../../network";
+import type { MemberInfo } from "../../network/protocol";
+import type { SessionAdvertisement } from "../../network/types";
+import { WebSocketService } from "../../network/websocketClient";
+import { WebSocketServer } from "../../network/websocketServer";
 import type {
   ConnectionStatus,
   DiscoveredSession,
@@ -13,8 +18,10 @@ import type {
   SessionActions,
   SessionState,
 } from "../types";
-import { discoveryManager, hostBroadcastService } from "../../network";
-import type { SessionAdvertisement } from "../../network/types";
+
+// Singleton instances for connection management
+let wsClient: WebSocketService | null = null;
+let wsServer: WebSocketServer | null = null;
 
 export type SessionSlice = SessionState & SessionActions;
 
@@ -145,13 +152,13 @@ export const createSessionSlice: StateCreator<
 
   /**
    * Start hosting (Step 2: Begin broadcasting session)
-   * Calls network layer to start mDNS + UDP broadcasts
+   * Starts mDNS + UDP broadcasts AND WebSocket server
    */
   startHosting: async () => {
     try {
       const session = get().currentSession;
       const localDevice = get().localDevice;
-      
+
       if (!session) {
         throw new Error("No session to host. Call createSession first.");
       }
@@ -184,6 +191,51 @@ export const createSessionSlice: StateCreator<
       // Start network broadcasts (mDNS + UDP)
       await hostBroadcastService.startBroadcast(advertisement, "192.168.1.100");
 
+      // Start WebSocket server for client connections
+      wsServer = new WebSocketServer({
+        port: 8080,
+        sessionId: session.id,
+        sessionName: session.name,
+        hostId: localDevice.id,
+        hostName: localDevice.name,
+        maxMembers: session.maxMembers,
+      });
+
+      // Setup server event handlers
+      wsServer.setHandlers({
+        onClientJoined: (client) => {
+          console.log("[SessionSlice] Client joined:", client.deviceName);
+
+          // Add client to member list
+          get().addMember({
+            id: client.deviceId,
+            name: client.deviceName,
+            role: "client",
+            connectionStatus: "connected",
+            joinedAt: client.joinedAt,
+            lastSeen: Date.now(),
+            address: client.address || "unknown",
+            latency: null,
+          });
+        },
+        onClientLeft: (deviceId, reason) => {
+          console.log("[SessionSlice] Client left:", deviceId, reason);
+          get().removeMember(deviceId);
+        },
+        onMemberListChanged: (members) => {
+          console.log("[SessionSlice] Member list updated:", members.length);
+          // Update session member count
+          if (get().currentSession) {
+            get().setCurrentSession({
+              ...get().currentSession!,
+              memberCount: members.length,
+            });
+          }
+        },
+      });
+
+      await wsServer.start();
+
       set({
         status: "hosting",
         error: null,
@@ -200,11 +252,17 @@ export const createSessionSlice: StateCreator<
 
   /**
    * Stop hosting and close session
-   * Stops network broadcasts and disconnects all clients
+   * Stops network broadcasts AND WebSocket server
    */
   stopHosting: async () => {
     try {
       console.log("[SessionSlice] Stopping host...");
+
+      // Stop WebSocket server
+      if (wsServer) {
+        await wsServer.stop();
+        wsServer = null;
+      }
 
       // Stop network broadcasts
       hostBroadcastService.stopBroadcast();
@@ -279,11 +337,13 @@ export const createSessionSlice: StateCreator<
       // Start discovery with timeout
       await discoveryManager.startDiscovery({
         timeout: 5000,
-        method: 'mdns',
+        method: "mdns",
         useFallback: true,
       });
 
-      console.log(`[SessionSlice] Discovered ${get().discoveredSessions.length} sessions`);
+      console.log(
+        `[SessionSlice] Discovered ${get().discoveredSessions.length} sessions`,
+      );
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       set({ error: message, status: "idle" });
@@ -307,7 +367,7 @@ export const createSessionSlice: StateCreator<
 
   /**
    * Join a discovered session
-   * Connects to host via TCP (planned for Phase 1.2)
+   * Connects to host via WebSocket
    */
   joinSession: async (sessionId: string) => {
     try {
@@ -331,57 +391,148 @@ export const createSessionSlice: StateCreator<
         error: null,
       });
 
-      // Simulate connection delay (in Phase 1.2, this will be real TCP connection)
-      await new Promise((resolve) => setTimeout(resolve, 1000));
+      // Extract host IP and port from hostAddress (format: "IP:PORT")
+      const [hostIP, portStr] = discovered.session.hostAddress.split(":");
+      const port = parseInt(portStr, 10) || 8080;
 
-      set({
-        status: "connected",
-        role: "client",
-        currentSession: discovered.session,
-        connectedAt: Date.now(),
-        discoveredSessions: [], // Clear discovery list
+      // Create WebSocket client
+      wsClient = new WebSocketService({
+        host: `${hostIP}:${port}`,
+        sessionId,
+        deviceId: localDevice.id,
+        deviceName: localDevice.name,
       });
 
-      // Add self as member
-      get().addMember({
-        id: localDevice.id,
-        name: localDevice.name,
-        role: "client",
-        connectionStatus: "connected",
-        joinedAt: Date.now(),
-        lastSeen: Date.now(),
-        address: "192.168.1.50", // TODO: Get local IP from network utils
-        latency: Math.floor(Math.random() * 50) + 10, // 10-60ms
+      // Setup message handlers
+      wsClient.setHandlers({
+        onWelcome: (message) => {
+          console.log("[SessionSlice] Received WELCOME");
+
+          set({
+            status: "connected",
+            role: "client",
+            currentSession: discovered.session,
+            connectedAt: message.payload.connectedAt,
+            discoveredSessions: [],
+          });
+
+          // Add self as member
+          get().addMember({
+            id: localDevice.id,
+            name: localDevice.name,
+            role: "client",
+            connectionStatus: "connected",
+            joinedAt: Date.now(),
+            lastSeen: Date.now(),
+            address: hostIP,
+            latency: wsClient?.getLatency() || null,
+          });
+        },
+        onMemberList: (message) => {
+          console.log(
+            "[SessionSlice] Received MEMBER_LIST:",
+            message.payload.totalCount,
+          );
+
+          // Clear and rebuild member list
+          get().clearMembers();
+
+          message.payload.members.forEach((member: MemberInfo) => {
+            get().addMember({
+              id: member.id,
+              name: member.name,
+              role: member.role,
+              connectionStatus: member.connectionStatus,
+              joinedAt: member.joinedAt,
+              lastSeen: member.lastSeen,
+              address: member.address,
+              latency: member.latency,
+            });
+
+            // Set host
+            if (member.role === "host") {
+              get().setHost({
+                id: member.id,
+                name: member.name,
+                role: "host",
+                connectionStatus: member.connectionStatus,
+                joinedAt: member.joinedAt,
+                lastSeen: member.lastSeen,
+                address: member.address,
+                latency: null,
+              });
+            }
+          });
+        },
+        onMemberJoined: (message) => {
+          console.log(
+            "[SessionSlice] Member joined:",
+            message.payload.member.name,
+          );
+          const member = message.payload.member;
+
+          get().addMember({
+            id: member.id,
+            name: member.name,
+            role: member.role,
+            connectionStatus: member.connectionStatus,
+            joinedAt: member.joinedAt,
+            lastSeen: member.lastSeen,
+            address: member.address,
+            latency: member.latency,
+          });
+        },
+        onMemberLeft: (message) => {
+          console.log("[SessionSlice] Member left:", message.payload.deviceId);
+          get().removeMember(message.payload.deviceId);
+        },
+        onKicked: (message) => {
+          console.log("[SessionSlice] Kicked:", message.payload.reason);
+          set({
+            error: `Kicked: ${message.payload.reason}`,
+            status: "idle",
+            role: null,
+            currentSession: null,
+          });
+          get().clearMembers();
+        },
+        onSessionClosed: (message) => {
+          console.log("[SessionSlice] Session closed:", message.payload.reason);
+          set({
+            error: `Session closed: ${message.payload.reason}`,
+            status: "idle",
+            role: null,
+            currentSession: null,
+          });
+          get().clearMembers();
+        },
+        onError: (message) => {
+          console.error(
+            "[SessionSlice] Error from host:",
+            message.payload.message,
+          );
+          set({
+            error: message.payload.message,
+            status: "idle",
+          });
+        },
       });
 
-      // Add host as member
-      get().addMember({
-        id: discovered.session.hostId,
-        name: discovered.session.hostName,
-        role: "host",
-        connectionStatus: "connected",
-        joinedAt: discovered.session.createdAt,
-        lastSeen: Date.now(),
-        address: discovered.session.hostAddress.split(":")[0],
-        latency: null,
-      });
+      // Connect to host
+      await wsClient.connectToHost();
 
-      get().setHost({
-        id: discovered.session.hostId,
-        name: discovered.session.hostName,
-        role: "host",
-        connectionStatus: "connected",
-        joinedAt: discovered.session.createdAt,
-        lastSeen: Date.now(),
-        address: discovered.session.hostAddress.split(":")[0],
-        latency: null,
-      });
-
-      console.log("[SessionSlice] Successfully joined session");
+      console.log("[SessionSlice] Successfully connected to host");
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown error";
       set({ error: message, status: "idle" });
       console.error("[SessionSlice] Failed to join session:", message);
+
+      // Cleanup on failure
+      if (wsClient) {
+        wsClient.disconnect();
+        wsClient = null;
+      }
+
       throw error;
     }
   },
@@ -399,9 +550,11 @@ export const createSessionSlice: StateCreator<
       // Host leaving = stop hosting
       get().stopHosting();
     } else {
-      // Client leaving = disconnect
-      // TODO: Notify host we're leaving
-      // NetworkLayer.disconnect();
+      // Client leaving = disconnect WebSocket
+      if (wsClient) {
+        wsClient.disconnect("User left session");
+        wsClient = null;
+      }
 
       set({
         status: "idle",

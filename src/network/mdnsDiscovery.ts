@@ -3,24 +3,48 @@
  * Primary discovery method using Zeroconf
  */
 
-import { Zeroconf } from 'react-native-zeroconf';
-import type { DiscoveredSessionData, SessionAdvertisement, DiscoveryOptions } from './types';
+import Zeroconf from "react-native-zeroconf";
+import type {
+  DiscoveredSessionData,
+  DiscoveryOptions,
+  SessionAdvertisement,
+} from "./types";
 
-const LOUDSYNC_SERVICE_TYPE = '_loudsync._tcp';
-const LOUDSYNC_DOMAIN = '.local.';
+const LOUDSYNC_SERVICE_TYPE = "_loudsync._tcp";
+const LOUDSYNC_DOMAIN = ".local.";
+
+// Add helper type to fix type checking
+interface ZeroconfInstance {
+    scan(type: string, domain: string, timeout: number): void;
+    stop(): void;
+    on(event: string, callback: Function): void;
+    removeAllListeners(event: string): void;
+}
 
 /**
  * mDNS Discovery Service
  * Uses Zeroconf for automatic service discovery
  */
 export class MDNSDiscoveryService {
-  private zeroconf: Zeroconf;
+  private zeroconf: Zeroconf | null = null; // Explicitly nullable
   private isScanning = false;
   private sessions: Map<string, DiscoveredSessionData> = new Map();
   private scanTimeout: ReturnType<typeof setTimeout> | null = null;
 
   constructor() {
-    this.zeroconf = new Zeroconf();
+    try {
+      this.zeroconf = new Zeroconf();
+      if (!this.zeroconf) {
+        throw new Error("Zeroconf constructor returned null/undefined");
+      }
+    } catch (error) {
+      console.warn(
+        "[mDNS] Zeroconf initialization failed (native module missing):",
+        error,
+      );
+      // @ts-ignore - Set to null for fallback handling
+      this.zeroconf = null;
+    }
   }
 
   /**
@@ -30,10 +54,10 @@ export class MDNSDiscoveryService {
   async startScan(
     onSessionFound: (session: DiscoveredSessionData) => void,
     onSessionLost: (sessionId: string) => void,
-    options: DiscoveryOptions = {}
+    options: DiscoveryOptions = {},
   ): Promise<void> {
     if (this.isScanning) {
-      console.warn('[mDNS] Scan already in progress');
+      console.warn("[mDNS] Scan already in progress");
       return;
     }
 
@@ -41,25 +65,48 @@ export class MDNSDiscoveryService {
     this.isScanning = true;
     this.sessions.clear();
 
-    console.log('[mDNS] Starting scan for LOUDSYNC sessions...');
+    console.log("[mDNS] Starting scan for LOUDSYNC sessions...");
+    
+    // Double check instance availability
+    if (!this.zeroconf) {
+      console.warn("[mDNS] Zeroconf not available (pre-scan check)");
+      this.isScanning = false;
+      return Promise.reject(new Error("mDNS not available - native module missing"));
+    }
 
     return new Promise((resolve, reject) => {
       try {
-        // Listen for services found
-        this.zeroconf.on('found', (key: string, result: any) => {
+        if (!this.zeroconf) {
+           this.isScanning = false;
+           reject(new Error("Zeroconf instance is null"));
+           return;
+        }
+
+        // Listen for services resolved (with full details)
+        this.zeroconf.on("resolved", (result: any) => {
           this.handleServiceFound(result, onSessionFound);
         });
 
-        // Listen for services lost
-        this.zeroconf.on('lost', (key: string, result: any) => {
-          const sessionId = this.extractSessionId(result.name);
+        // Listen for services removed
+        this.zeroconf.on("remove", (name: string) => {
+          const sessionId = this.extractSessionId(name);
           console.log(`[mDNS] Session lost: ${sessionId}`);
           this.sessions.delete(sessionId);
           onSessionLost(sessionId);
         });
 
         // Start scan
-        this.zeroconf.scan(LOUDSYNC_SERVICE_TYPE, LOUDSYNC_DOMAIN, 5000);
+        try {
+          if (this.zeroconf) {
+             this.zeroconf.scan(LOUDSYNC_SERVICE_TYPE, LOUDSYNC_DOMAIN, 5000);
+          } else {
+             throw new Error("Zeroconf became null before scan");
+          }
+        } catch (scanError) {
+           console.warn("[mDNS] Scan start failed (native warning):", scanError);
+           // Don't reject yet, listeners might still work if it's just a warning
+           // But if it's fatal, catch block below handles it
+        }
 
         // Auto-stop after timeout
         this.scanTimeout = setTimeout(() => {
@@ -67,7 +114,7 @@ export class MDNSDiscoveryService {
           resolve();
         }, timeout);
       } catch (error) {
-        console.error('[mDNS] Scan failed:', error);
+        console.error("[mDNS] Scan failed:", error);
         this.isScanning = false;
         reject(error);
       }
@@ -80,14 +127,26 @@ export class MDNSDiscoveryService {
   stopScan(): void {
     if (!this.isScanning) return;
 
-    console.log('[mDNS] Stopping scan');
-    if (this.scanTimeout) clearTimeout(this.scanTimeout);
+    console.log("[mDNS] Stopping scan");
+    if (this.scanTimeout) {
+      clearTimeout(this.scanTimeout);
+      this.scanTimeout = null;
+    }
 
     try {
-      this.zeroconf.stop();
+      const zeroconf = this.zeroconf;
+      if (zeroconf) {
+        if (typeof zeroconf.stop === "function") {
+          zeroconf.stop();
+        }
+        if (typeof zeroconf.removeAllListeners === "function") {
+          zeroconf.removeAllListeners("resolved");
+          zeroconf.removeAllListeners("remove");
+        }
+      }
       this.isScanning = false;
     } catch (error) {
-      console.error('[mDNS] Failed to stop scan:', error);
+      console.error("[mDNS] Failed to stop scan:", error);
     }
   }
 
@@ -96,14 +155,14 @@ export class MDNSDiscoveryService {
    */
   private handleServiceFound(
     result: any,
-    onSessionFound: (session: DiscoveredSessionData) => void
+    onSessionFound: (session: DiscoveredSessionData) => void,
   ): void {
     try {
       const sessionId = this.extractSessionId(result.name);
       const hostAddress = result.addresses?.[0] || result.host;
 
       if (!hostAddress) {
-        console.warn('[mDNS] No address found for service');
+        console.warn("[mDNS] No address found for service");
         return;
       }
 
@@ -112,12 +171,12 @@ export class MDNSDiscoveryService {
         result.txt || {},
         sessionId,
         hostAddress,
-        result.port
+        result.port,
       );
 
       const discoveredSession: DiscoveredSessionData = {
         advertisement,
-        discoveryMethod: 'mdns',
+        discoveryMethod: "mdns",
         signalStrength: 100, // mDNS is reliable, assume 100%
         lastSeen: Date.now(),
       };
@@ -126,7 +185,7 @@ export class MDNSDiscoveryService {
       this.sessions.set(sessionId, discoveredSession);
       onSessionFound(discoveredSession);
     } catch (error) {
-      console.error('[mDNS] Error handling found service:', error);
+      console.error("[mDNS] Error handling found service:", error);
     }
   }
 
@@ -146,20 +205,20 @@ export class MDNSDiscoveryService {
     txt: Record<string, string>,
     sessionId: string,
     hostAddress: string,
-    port: number
+    port: number,
   ): SessionAdvertisement {
     return {
       sessionId,
-      sessionName: txt['session_name'] || 'Unknown Session',
-      hostId: txt['host_id'] || 'unknown',
-      hostName: txt['host_name'] || 'Unknown Host',
+      sessionName: txt["session_name"] || "Unknown Session",
+      hostId: txt["host_id"] || "unknown",
+      hostName: txt["host_name"] || "Unknown Host",
       hostAddress,
       port,
-      memberCount: parseInt(txt['member_count'] || '1', 10),
-      maxMembers: parseInt(txt['max_members'] || '8', 10),
-      isPasswordProtected: txt['password_protected'] === 'true',
-      version: txt['version'] || '1.0.0',
-      timestamp: parseInt(txt['timestamp'] || Date.now().toString(), 10),
+      memberCount: parseInt(txt["member_count"] || "1", 10),
+      maxMembers: parseInt(txt["max_members"] || "8", 10),
+      isPasswordProtected: txt["password_protected"] === "true",
+      version: txt["version"] || "1.0.0",
+      timestamp: parseInt(txt["timestamp"] || Date.now().toString(), 10),
     };
   }
 
@@ -183,9 +242,16 @@ export class MDNSDiscoveryService {
   destroy(): void {
     this.stopScan();
     try {
-      this.zeroconf.stop();
+      const zeroconf = this.zeroconf;
+      if (zeroconf && typeof zeroconf.stop === "function") {
+        zeroconf.stop();
+        if (typeof zeroconf.removeAllListeners === "function") {
+            zeroconf.removeAllListeners("resolved");
+            zeroconf.removeAllListeners("remove");
+        }
+      }
     } catch (error) {
-      console.error('[mDNS] Error destroying:', error);
+      console.error("[mDNS] Error destroying:", error);
     }
   }
 }

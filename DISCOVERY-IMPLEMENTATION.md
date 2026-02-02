@@ -30,7 +30,7 @@ Session Created
                                          └─ Fallback: UDPDiscoveryService
                                             ├─ Send: "LOUDSYNC_DISCOVER"
                                             └─ Listen: Responses
-                                      
+
                                       Sessions Found
                                       │
                                       └─ discoveryManager
@@ -42,6 +42,7 @@ Session Created
 ### 1. Discovery Approaches
 
 #### **mDNS / Zeroconf (Primary)**
+
 - **Advantages**: Automatic, passive discovery, battery efficient
 - **How it works**: Service publishes itself, clients listen
 - **Library**: `react-native-zeroconf`
@@ -59,14 +60,15 @@ zeroconf.registerService({
     session_name: "Party",
     host_name: "Alice's iPhone",
     member_count: "3",
-  }
-})
+  },
+});
 
 // Client discovers
 zeroconf.scan("_loudsync._tcp", ".local.", 5000);
 ```
 
 #### **UDP Broadcast (Fallback)**
+
 - **Advantages**: Fallback when mDNS fails, explicit control
 - **How it works**: Host broadcasts packets, clients listen
 - **Library**: `react-native-udp`
@@ -85,6 +87,7 @@ socket.send("LOUDSYNC_DISCOVER", BROADCAST_ADDRESS, 9876);
 ```
 
 #### **QR Code Join (Optional/Future)**
+
 - Manual scanning of QR code containing:
   - Session ID
   - Host IP + Port
@@ -129,17 +132,17 @@ Client initiates discovery
 
 ```typescript
 interface SessionAdvertisement {
-  sessionId: string;           // Unique ID
-  sessionName: string;         // "Alice's Party"
-  hostId: string;              // Device ID of host
-  hostName: string;            // "Alice's iPhone"
-  hostAddress: string;         // "192.168.1.100"
-  port: number;                // TCP port for joins (8080)
-  memberCount: number;         // Current members
-  maxMembers: number;          // Max capacity
+  sessionId: string; // Unique ID
+  sessionName: string; // "Alice's Party"
+  hostId: string; // Device ID of host
+  hostName: string; // "Alice's iPhone"
+  hostAddress: string; // "192.168.1.100"
+  port: number; // TCP port for joins (8080)
+  memberCount: number; // Current members
+  maxMembers: number; // Max capacity
   isPasswordProtected: boolean; // Join requires password
-  version: string;             // Protocol version
-  timestamp: number;           // When advertised
+  version: string; // Protocol version
+  timestamp: number; // When advertised
 }
 ```
 
@@ -346,14 +349,13 @@ Client Device
 
 ```typescript
 // Network Issues
-discoverSessions()
-  .catch(error => {
-    if (error.mDNSFailed && fallbackToUDP) {
-      // Try UDP
-    } else {
-      // Show error
-    }
-  });
+discoverSessions().catch((error) => {
+  if (error.mDNSFailed && fallbackToUDP) {
+    // Try UDP
+  } else {
+    // Show error
+  }
+});
 
 // Session Disappeared
 onSessionLost = (sessionId) => {
@@ -362,14 +364,13 @@ onSessionLost = (sessionId) => {
 };
 
 // Connection Failed
-joinSession(sessionId)
-  .catch(error => {
-    if (error.code === "TIMEOUT") {
-      // Host unreachable
-    } else if (error.code === "REJECTED") {
-      // Host rejected join request
-    }
-  });
+joinSession(sessionId).catch((error) => {
+  if (error.code === "TIMEOUT") {
+    // Host unreachable
+  } else if (error.code === "REJECTED") {
+    // Host rejected join request
+  }
+});
 ```
 
 ---
@@ -377,18 +378,21 @@ joinSession(sessionId)
 ### 7. Performance Optimization
 
 **Deduplication**: Prevents duplicate state updates
+
 ```typescript
 // Before: 5 sessions, 3 from mDNS + 2 from UDP = 5 duplicates
 // After: 5 sessions, mDNS preferred, UDP ignored
 ```
 
 **Expiry Checking**: Removes stale sessions automatically
+
 ```typescript
 // Before: Dead hosts stay in list forever
 // After: Auto-remove after 15s no-update
 ```
 
 **Method Preference**: Prioritizes mDNS
+
 ```typescript
 // Both methods discover same session?
 // → Keep mDNS (more reliable, 100% signal)
@@ -396,6 +400,7 @@ joinSession(sessionId)
 ```
 
 **Listener Pattern**: Avoids full state reloads
+
 ```typescript
 // Before: Re-render entire session list on each discovery
 // After: Only notify of changes, state updates optimized
@@ -432,4 +437,3 @@ joinSession(sessionId)
 - **IPv6**: Currently supports IPv4 only
 - **Cross-network**: LAN only (no internet routing)
 - **Security**: No encryption (Phase 2)
-

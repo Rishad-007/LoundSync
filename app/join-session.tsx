@@ -25,6 +25,8 @@ import {
   GradientButton,
   IconButton,
 } from "../src/components";
+import { discoveryManager } from "../src/network/discoveryManager";
+import type { DiscoveredSessionData } from "../src/network/types";
 import { theme } from "../src/theme";
 
 const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
@@ -33,6 +35,9 @@ export default function JoinSessionScreen() {
   const router = useRouter();
   const [sessionCode, setSessionCode] = useState("");
   const [isScanning, setIsScanning] = useState(true);
+  const [discoveredSessions, setDiscoveredSessions] = useState<
+    DiscoveredSessionData[]
+  >([]);
   const radarRotation = useRef(new RNAnimated.Value(0)).current;
   const pulseAnim = useRef(new RNAnimated.Value(0)).current;
 
@@ -62,9 +67,32 @@ export default function JoinSessionScreen() {
       ]),
     ).start();
 
-    // Simulate scanning completion
+    // Start Discovery
+    const initDiscovery = async () => {
+      try {
+        await discoveryManager.startDiscovery();
+        setDiscoveredSessions(discoveryManager.getDiscoveredSessions());
+      } catch (error) {
+        console.warn("Discovery start failed:", error);
+      }
+    };
+
+    initDiscovery();
+
+    // Subscribe to updates
+    const unsubscribe = discoveryManager.subscribe(
+      () => setDiscoveredSessions(discoveryManager.getDiscoveredSessions()),
+      () => setDiscoveredSessions(discoveryManager.getDiscoveredSessions()),
+    );
+
+    // Stop scanning animation after 5s
     const timer = setTimeout(() => setIsScanning(false), 5000);
-    return () => clearTimeout(timer);
+
+    return () => {
+      clearTimeout(timer);
+      unsubscribe();
+      discoveryManager.stopDiscovery();
+    };
   }, []);
 
   const radarRotate = radarRotation.interpolate({
@@ -88,15 +116,30 @@ export default function JoinSessionScreen() {
     opacity: pulseOpacity,
   };
 
-  const handleJoinSession = () => {
+  const handleJoinSession = (session?: DiscoveredSessionData) => {
+    if (session) {
+      router.push({
+        pathname: "/player-room",
+        params: {
+          sessionId: session.advertisement.sessionId,
+          sessionName: session.advertisement.sessionName,
+          isHost: "false",
+        },
+      });
+      return;
+    }
+
     if (!sessionCode.trim()) {
       return;
     }
 
+    // Strip dashes for ID
+    const cleanId = sessionCode.replace(/[^A-Z0-9]/g, "");
+
     router.push({
       pathname: "/player-room",
       params: {
-        sessionId: sessionCode.toUpperCase(),
+        sessionId: cleanId,
         sessionName: "Party Room",
         isHost: "false",
       },
@@ -204,22 +247,27 @@ export default function JoinSessionScreen() {
                   </View>
                 </View>
                 <AppText variant="body" weight="semibold" center>
-                  {isScanning ? "Scanning nearby sessions..." : "Scan Complete"}
+                  {isScanning
+                    ? "Scanning nearby sessions..."
+                    : discoveredSessions.length > 0
+                      ? "Sessions Found"
+                      : "Scan Complete"}
                 </AppText>
-                {!isScanning && (
+                {!isScanning && discoveredSessions.length > 0 && (
                   <AppText
                     variant="caption"
                     center
                     color={theme.colors.neon.green}
                   >
-                    3 sessions found
+                    {discoveredSessions.length} session
+                    {discoveredSessions.length !== 1 ? "s" : ""} found
                   </AppText>
                 )}
               </GlassCard>
             </Animated.View>
 
             {/* Nearby Sessions */}
-            {!isScanning && (
+            {(discoveredSessions.length > 0 || !isScanning) && (
               <Animated.View
                 entering={FadeInUp.delay(100).duration(600).springify()}
                 layout={Layout.springify()}
@@ -236,161 +284,83 @@ export default function JoinSessionScreen() {
                   </AppText>
                 </View>
 
-                <Animated.View
-                  entering={SlideInLeft.delay(200).duration(600).springify()}
-                  layout={Layout.springify()}
-                >
-                  <GlassCard intensity="medium" style={styles.sessionCard}>
-                    <LinearGradient
-                      colors={[...theme.gradients.party, "transparent"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.sessionGradient}
-                    />
-                    <View style={styles.sessionHeader}>
-                      <View style={styles.sessionIconLarge}>
-                        <Ionicons
-                          name="headset"
-                          size={28}
-                          color={theme.colors.neon.pink}
-                        />
-                      </View>
-                      <View style={styles.sessionInfo}>
-                        <AppText variant="body" weight="bold">
-                          Friday Night Party 🎉
-                        </AppText>
-                        <AppText variant="caption">
-                          Host: Alex • 5 devices connected
-                        </AppText>
-                        <View style={styles.sessionMeta}>
-                          <View style={styles.signalBadge}>
-                            <Ionicons
-                              name="radio"
-                              size={12}
-                              color={theme.colors.neon.green}
-                            />
-                            <AppText
-                              variant="caption"
-                              style={styles.signalText}
-                            >
-                              Strong
-                            </AppText>
-                          </View>
-                        </View>
-                      </View>
-                      <GradientButton
-                        title="Join"
-                        gradient="secondary"
-                        size="sm"
-                        onPress={() => handleJoinSession()}
-                      />
+                {discoveredSessions.length === 0 ? (
+                  <GlassCard intensity="light" style={styles.sessionCard}>
+                    <View style={{ padding: 20, alignItems: "center" }}>
+                      <AppText
+                        variant="body"
+                        color={theme.colors.text.secondary}
+                      >
+                        No nearby sessions found.
+                      </AppText>
+                      <AppText
+                        variant="caption"
+                        color={theme.colors.text.tertiary}
+                      >
+                        Make sure you are on the same Wi-Fi.
+                      </AppText>
                     </View>
                   </GlassCard>
-                </Animated.View>
-
-                <Animated.View
-                  entering={SlideInLeft.delay(300).duration(600).springify()}
-                  layout={Layout.springify()}
-                >
-                  <GlassCard intensity="medium" style={styles.sessionCard}>
-                    <LinearGradient
-                      colors={[...theme.gradients.sunset, "transparent"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.sessionGradient}
-                    />
-                    <View style={styles.sessionHeader}>
-                      <View style={styles.sessionIconLarge}>
-                        <Ionicons
-                          name="disc"
-                          size={28}
-                          color={theme.colors.neon.orange}
+                ) : (
+                  discoveredSessions.map((session, index) => (
+                    <Animated.View
+                      key={session.advertisement.sessionId}
+                      entering={SlideInLeft.delay(200 + index * 100)
+                        .duration(600)
+                        .springify()}
+                      layout={Layout.springify()}
+                    >
+                      <GlassCard intensity="medium" style={styles.sessionCard}>
+                        <LinearGradient
+                          colors={[...theme.gradients.electric, "transparent"]}
+                          start={{ x: 0, y: 0 }}
+                          end={{ x: 1, y: 1 }}
+                          style={styles.sessionGradient}
                         />
-                      </View>
-                      <View style={styles.sessionInfo}>
-                        <AppText variant="body" weight="bold">
-                          Chill Vibes Session
-                        </AppText>
-                        <AppText variant="caption">
-                          Host: Sam • 3 devices connected
-                        </AppText>
-                        <View style={styles.sessionMeta}>
-                          <View style={styles.signalBadge}>
+                        <View style={styles.sessionHeader}>
+                          <View style={styles.sessionIconLarge}>
                             <Ionicons
-                              name="radio"
-                              size={12}
-                              color={theme.colors.neon.yellow}
+                              name="musical-notes"
+                              size={28}
+                              color={theme.colors.neon.cyan}
                             />
-                            <AppText
-                              variant="caption"
-                              style={styles.signalText}
-                            >
-                              Medium
-                            </AppText>
                           </View>
-                        </View>
-                      </View>
-                      <GradientButton
-                        title="Join"
-                        gradient="sunset"
-                        size="sm"
-                        onPress={() => handleJoinSession()}
-                      />
-                    </View>
-                  </GlassCard>
-                </Animated.View>
-
-                <Animated.View
-                  entering={SlideInLeft.delay(400).duration(600).springify()}
-                  layout={Layout.springify()}
-                >
-                  <GlassCard intensity="medium" style={styles.sessionCard}>
-                    <LinearGradient
-                      colors={[...theme.gradients.lime, "transparent"]}
-                      start={{ x: 0, y: 0 }}
-                      end={{ x: 1, y: 1 }}
-                      style={styles.sessionGradient}
-                    />
-                    <View style={styles.sessionHeader}>
-                      <View style={styles.sessionIconLarge}>
-                        <Ionicons
-                          name="fitness"
-                          size={28}
-                          color={theme.colors.neon.green}
-                        />
-                      </View>
-                      <View style={styles.sessionInfo}>
-                        <AppText variant="body" weight="bold">
-                          Workout Beats
-                        </AppText>
-                        <AppText variant="caption">
-                          Host: Jordan • 2 devices connected
-                        </AppText>
-                        <View style={styles.sessionMeta}>
-                          <View style={styles.signalBadge}>
-                            <Ionicons
-                              name="radio"
-                              size={12}
-                              color={theme.colors.neon.green}
-                            />
-                            <AppText
-                              variant="caption"
-                              style={styles.signalText}
-                            >
-                              Strong
+                          <View style={styles.sessionInfo}>
+                            <AppText variant="body" weight="bold">
+                              {session.advertisement.sessionName}
                             </AppText>
+                            <AppText variant="caption">
+                              Host: {session.advertisement.hostName} •{" "}
+                              {session.advertisement.memberCount}/
+                              {session.advertisement.maxMembers}
+                            </AppText>
+                            <View style={styles.sessionMeta}>
+                              <View style={styles.signalBadge}>
+                                <Ionicons
+                                  name="radio"
+                                  size={12}
+                                  color={theme.colors.neon.green}
+                                />
+                                <AppText
+                                  variant="caption"
+                                  style={styles.signalText}
+                                >
+                                  Detected
+                                </AppText>
+                              </View>
+                            </View>
                           </View>
+                          <GradientButton
+                            title="Join"
+                            gradient="secondary"
+                            size="sm"
+                            onPress={() => handleJoinSession(session)}
+                          />
                         </View>
-                      </View>
-                      <GradientButton
-                        title="Join"
-                        gradient="lime"
-                        size="sm"
-                        onPress={() => handleJoinSession()}
-                      />
-                    </View>
-                  </GlassCard>
-                </Animated.View>
+                      </GlassCard>
+                    </Animated.View>
+                  ))
+                )}
               </Animated.View>
             )}
 
@@ -439,89 +409,6 @@ export default function JoinSessionScreen() {
               </AppText>
             </Animated.View>
 
-            {/* Recent Sessions */}
-            <Animated.View
-              entering={FadeInUp.delay(300).duration(600).springify()}
-              style={styles.quickJoinSection}
-            >
-              <View style={styles.sectionHeader}>
-                <Ionicons
-                  name="time"
-                  size={20}
-                  color={theme.colors.neon.pink}
-                />
-                <AppText variant="h4" weight="bold">
-                  Recent Sessions
-                </AppText>
-              </View>
-
-              <GlassCard intensity="medium" style={styles.sessionCard}>
-                <View style={styles.sessionHeader}>
-                  <View style={styles.sessionIcon}>
-                    <Ionicons
-                      name="musical-notes"
-                      size={24}
-                      color={theme.colors.neon.pink}
-                    />
-                  </View>
-                  <View style={styles.sessionInfo}>
-                    <AppText variant="body" weight="semibold">
-                      Weekend Party
-                    </AppText>
-                    <AppText variant="caption">Last joined 2 days ago</AppText>
-                  </View>
-                  <IconButton
-                    icon={
-                      <Ionicons
-                        name="enter"
-                        size={20}
-                        color={theme.colors.white}
-                      />
-                    }
-                    variant="gradient"
-                    gradient="secondary"
-                    size="sm"
-                    onPress={() => {
-                      setSessionCode("ABC-123");
-                    }}
-                  />
-                </View>
-              </GlassCard>
-
-              <GlassCard intensity="medium" style={styles.sessionCard}>
-                <View style={styles.sessionHeader}>
-                  <View style={styles.sessionIcon}>
-                    <Ionicons
-                      name="people"
-                      size={24}
-                      color={theme.colors.neon.cyan}
-                    />
-                  </View>
-                  <View style={styles.sessionInfo}>
-                    <AppText variant="body" weight="semibold">
-                      Study Session
-                    </AppText>
-                    <AppText variant="caption">Last joined 1 week ago</AppText>
-                  </View>
-                  <IconButton
-                    icon={
-                      <Ionicons
-                        name="enter"
-                        size={20}
-                        color={theme.colors.white}
-                      />
-                    }
-                    variant="gradient"
-                    gradient="secondary"
-                    size="sm"
-                    onPress={() => {
-                      setSessionCode("XYZ-789");
-                    }}
-                  />
-                </View>
-              </GlassCard>
-            </Animated.View>
-
             {/* Info Card */}
             <Animated.View
               entering={FadeInUp.delay(400).duration(600).springify()}
@@ -558,7 +445,7 @@ export default function JoinSessionScreen() {
                 fullWidth
                 disabled={sessionCode.length < 7}
                 icon={<Ionicons name="enter" size={24} color="white" />}
-                onPress={handleJoinSession}
+                onPress={() => handleJoinSession()}
               />
             </Animated.View>
           </ScrollView>

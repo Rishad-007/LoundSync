@@ -2,11 +2,15 @@
  * Type declarations for react-native-zeroconf
  */
 
-declare module 'react-native-zeroconf' {
-  export class Zeroconf {
+declare module "react-native-zeroconf" {
+  export default class Zeroconf {
     scan(type: string, domain: string, timeout: number): void;
     stop(): void;
-    on(event: 'found' | 'lost' | 'error', callback: (key: string, result: any) => void): void;
+    on(event: "start" | "stop" | "update", callback: () => void): void;
+    on(event: "found", callback: (name: string, result?: any) => void): void;
+    on(event: "remove", callback: (name: string) => void): void;
+    on(event: "resolved", callback: (result: any) => void): void;
+    on(event: "error", callback: (err: any) => void): void;
     registerService(options: {
       name: string;
       type: string;

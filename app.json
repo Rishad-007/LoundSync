@@ -9,7 +9,12 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "infoPlist": {
+        "NSLocalNetworkUsageDescription": "LourderParty needs access to your local network to discover and connect to nearby party sessions.",
+        "NSBonjourServices": ["_loudsync._tcp", "_loudsync._udp"]
+      },
+      "bundleIdentifier": "com.rishad.lourderparty"
     },
     "android": {
       "adaptiveIcon": {

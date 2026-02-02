@@ -6,7 +6,7 @@
 /**
  * Discovery method used
  */
-export type DiscoveryMethod = 'mdns' | 'udp' | 'manual';
+export type DiscoveryMethod = "mdns" | "udp" | "manual";
 
 /**
  * Network service info returned by mDNS

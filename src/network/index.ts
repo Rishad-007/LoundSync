@@ -2,12 +2,15 @@
  * Network Layer Public API
  */
 
-export * from './types';
-export { mdnsService } from './mdnsDiscovery';
-export { udpService } from './udpDiscovery';
-export { hostBroadcastService } from './hostBroadcast';
-export { discoveryManager } from './discoveryManager';
-export type { MDNSDiscoveryService } from './mdnsDiscovery';
-export type { UDPDiscoveryService } from './udpDiscovery';
-export type { HostBroadcastService } from './hostBroadcast';
-export type { DiscoveryManager } from './discoveryManager';
+export { discoveryManager } from "./discoveryManager";
+export type { DiscoveryManager } from "./discoveryManager";
+export { hostBroadcastService } from "./hostBroadcast";
+export type { HostBroadcastService } from "./hostBroadcast";
+export { mdnsService } from "./mdnsDiscovery";
+export type { MDNSDiscoveryService } from "./mdnsDiscovery";
+export * from "./protocol";
+export * from "./types";
+export { udpService } from "./udpDiscovery";
+export type { UDPDiscoveryService } from "./udpDiscovery";
+export { WebSocketService } from "./websocketClient";
+export { WebSocketServer } from "./websocketServer";

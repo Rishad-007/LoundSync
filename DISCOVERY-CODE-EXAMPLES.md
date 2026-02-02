@@ -7,14 +7,14 @@ Complete implementation guide with examples.
 #### Setup & Initialization
 
 ```typescript
-import { hostBroadcastService } from '@/src/network';
-import type { SessionAdvertisement } from '@/src/network/types';
+import { hostBroadcastService } from "@/src/network";
+import type { SessionAdvertisement } from "@/src/network/types";
 
 // When user creates a session as host
 async function broadcastSession() {
   const session = store.getState().currentSession;
   const localIP = "192.168.1.100"; // TODO: Auto-detect from network
-  
+
   const advertisement: SessionAdvertisement = {
     sessionId: session.id,
     sessionName: session.name,
@@ -30,11 +30,10 @@ async function broadcastSession() {
   };
 
   // Start broadcasting on LAN
-  await hostBroadcastService.startBroadcast(
-    advertisement,
-    localIP,
-    { interval: 3000, port: 9876 }
-  );
+  await hostBroadcastService.startBroadcast(advertisement, localIP, {
+    interval: 3000,
+    port: 9876,
+  });
 }
 ```
 
@@ -73,7 +72,7 @@ function endSession() {
 #### Simple Discovery
 
 ```typescript
-import { discoveryManager } from '@/src/network';
+import { discoveryManager } from "@/src/network";
 
 async function findSessions() {
   const sessions = [];
@@ -86,20 +85,22 @@ async function findSessions() {
     },
     (sessionId) => {
       console.log("Lost:", sessionId);
-      sessions = sessions.filter(s => s.advertisement.sessionId !== sessionId);
-    }
+      sessions = sessions.filter(
+        (s) => s.advertisement.sessionId !== sessionId,
+      );
+    },
   );
 
   // Start scan
   await discoveryManager.startDiscovery({
-    timeout: 5000,           // Scan for 5 seconds
-    method: 'mdns',          // Try mDNS first
-    useFallback: true        // Fall back to UDP
+    timeout: 5000, // Scan for 5 seconds
+    method: "mdns", // Try mDNS first
+    useFallback: true, // Fall back to UDP
   });
 
   // Cleanup
   unsubscribe();
-  
+
   return sessions;
 }
 ```
@@ -110,7 +111,7 @@ async function findSessions() {
 // Component that shows live session list
 function SessionList() {
   const [sessions, setSessions] = useState([]);
-  
+
   useEffect(() => {
     // Subscribe to discovery events
     const unsubscribe = discoveryManager.subscribe(
@@ -120,7 +121,7 @@ function SessionList() {
           const exists = prev.find(
             s => s.advertisement.sessionId === session.advertisement.sessionId
           );
-          
+
           if (exists) {
             // Update existing (better signal, etc)
             return prev.map(s =>
@@ -129,7 +130,7 @@ function SessionList() {
                 : s
             );
           }
-          
+
           // Add new
           return [...prev, session];
         });
@@ -167,13 +168,12 @@ function SessionList() {
 async function discoverWithTimeout() {
   try {
     // These timeouts are built-in:
-    
+
     // 1. Scan timeout: Stop scanning after 5 seconds
     await discoveryManager.startDiscovery({ timeout: 5000 });
-    
+
     // 2. Session expiry: Auto-remove sessions not seen for 15s
     discoveryManager.setSessionExpiry(15000);
-    
   } catch (error) {
     console.error("Discovery failed:", error);
   }
@@ -189,14 +189,13 @@ async function discoverWithTimeout() {
 ```typescript
 // In src/state/slices/sessionSlice.ts
 
-import { discoveryManager, hostBroadcastService } from '../../network';
+import { discoveryManager, hostBroadcastService } from "../../network";
 
 export const createSessionSlice: StateCreator<LoudSyncStore> = (set, get) => ({
-  
   // Discovery actions
   discoverSessions: async () => {
     set({ status: "discovering" });
-    
+
     // Setup listeners
     discoveryManager.subscribe(
       (session) => {
@@ -210,27 +209,27 @@ export const createSessionSlice: StateCreator<LoudSyncStore> = (set, get) => ({
         get().addDiscoveredSession(discovered);
       },
       (sessionId) => {
-        set(state => ({
+        set((state) => ({
           discoveredSessions: state.discoveredSessions.filter(
-            d => d.session.id !== sessionId
-          )
+            (d) => d.session.id !== sessionId,
+          ),
         }));
-      }
+      },
     );
-    
+
     // Start discovery
     await discoveryManager.startDiscovery({
       timeout: 5000,
-      method: 'mdns',
+      method: "mdns",
       useFallback: true,
     });
   },
-  
+
   stopDiscovery: () => {
     discoveryManager.stopDiscovery();
     set({ status: "idle" });
   },
-  
+
   // Host broadcasting
   startHosting: async () => {
     const session = get().currentSession;
@@ -247,11 +246,11 @@ export const createSessionSlice: StateCreator<LoudSyncStore> = (set, get) => ({
       version: session.version,
       timestamp: Date.now(),
     };
-    
+
     await hostBroadcastService.startBroadcast(advertisement, "192.168.1.100");
     set({ status: "hosting" });
   },
-  
+
   stopHosting: async () => {
     hostBroadcastService.stopBroadcast();
     set({ status: "idle", role: null });
@@ -387,10 +386,10 @@ export function CreateSessionScreen() {
     try {
       // Step 1: Create session object
       await createSession(name);
-      
+
       // Step 2: Start broadcasting
       await startHosting();
-      
+
       Alert.alert("Success", "Session created and broadcast on LAN!");
       // Navigation happens automatically
     } catch (error) {
@@ -464,7 +463,7 @@ async function testDiscovery() {
       version: "1.0.0",
       timestamp: Date.now(),
     },
-    discoveryMethod: 'mdns' as const,
+    discoveryMethod: "mdns" as const,
     signalStrength: 100,
     lastSeen: Date.now(),
   };
@@ -480,17 +479,19 @@ async function testDiscovery() {
 ### 7. Performance Notes
 
 **Optimal Settings**:
+
 - Discovery timeout: 5-10 seconds (longer = more thorough but slower)
 - Session expiry: 15-30 seconds (matches broadcast interval)
 - Broadcast interval: 3 seconds (balances discovery speed vs battery)
 
 **Memory Usage**:
+
 - Each session: ~500 bytes in state
 - 10 sessions: ~5 KB
 - Discovery manager listeners: 1 per component
 
 **Network Usage**:
+
 - mDNS: Passive listening + periodic queries (~1 KB/min)
 - UDP: Active broadcast (~1 KB per broadcast, 3s interval)
 - Total: ~20 KB/min per host
-

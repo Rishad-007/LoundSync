@@ -4,7 +4,14 @@ import { LinearGradient } from "expo-linear-gradient";
 import { useLocalSearchParams, useRouter } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import React, { useEffect } from "react";
-import { ScrollView, StyleSheet, View } from "react-native";
+import {
+  Alert,
+  Pressable,
+  ScrollView,
+  Share,
+  StyleSheet,
+  View,
+} from "react-native";
 import Animated, {
   Easing,
   FadeIn,
@@ -22,6 +29,12 @@ import {
   GradientButton,
   IconButton,
 } from "../src/components";
+import {
+  useCurrentSession,
+  useIsHost,
+  useLoudSyncStore,
+  useMembers,
+} from "../src/state";
 import { theme } from "../src/theme";
 
 const AnimatedGlassCard = Animated.createAnimatedComponent(GlassCard);
@@ -34,11 +47,28 @@ export default function PlayerRoomScreen() {
     isHost: string;
   }>();
 
+  // State integration
+  const session = useCurrentSession();
+  const members = useMembers();
+  const isHost = useIsHost();
+  const { leaveSession, stopHosting } = useLoudSyncStore();
+
+  // Local state
   const [isPlaying, setIsPlaying] = React.useState(false);
-  const [connectedDevices] = React.useState(3);
   const [volume, setVolume] = React.useState(0.75);
   const [progress, setProgress] = React.useState(0.35);
-  const [syncHealth, setSyncHealth] = React.useState(92);
+
+  // Derived state
+  const connectedDevices = members.length;
+  const syncHealth = React.useMemo(() => {
+    // Calculate sync health based on latency variance
+    if (members.length === 0) return 100;
+    const latencies = members.map((m) => m.latency || 0).filter((l) => l > 0);
+    if (latencies.length === 0) return 100;
+    const avg = latencies.reduce((a, b) => a + b, 0) / latencies.length;
+    // Simple heuristic: < 20ms = 100%, 100ms = 50%
+    return Math.round(Math.max(0, Math.min(100, 100 - (avg - 20))));
+  }, [members]);
 
   // Enhanced waveform animations with Reanimated
   const waveAnims = Array.from({ length: 20 }, () => useSharedValue(0.3));
@@ -106,10 +136,39 @@ export default function PlayerRoomScreen() {
     opacity: interpolate(colorPulse.value, [0, 1], [0.15, 0.35]),
   }));
 
-  const isHost = params.isHost === "true";
+  const handleLeaveSession = async () => {
+    Alert.alert(
+      isHost ? "End Session?" : "Leave Session?",
+      isHost
+        ? "This will disconnect all users and end the session."
+        : "Are you sure you want to leave?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: isHost ? "End Session" : "Leave",
+          style: "destructive",
+          onPress: async () => {
+            if (isHost) {
+              await stopHosting();
+            } else {
+              leaveSession();
+            }
+            router.replace("/home");
+          },
+        },
+      ],
+    );
+  };
 
-  const handleLeaveSession = () => {
-    router.push("/home");
+  const handleShareSession = async () => {
+    if (!session) return;
+    try {
+      await Share.share({
+        message: `Join my LOUDSYNC party! Code: ${session.id}`,
+      });
+    } catch (error) {
+      console.log(error);
+    }
   };
 
   const handleDeviceList = () => {
@@ -182,11 +241,31 @@ export default function PlayerRoomScreen() {
             </View>
 
             <AppText variant="h2" weight="bold" center>
-              {params.sessionName}
+              {session?.name || params.sessionName}
             </AppText>
-            <AppText variant="body" color={theme.colors.text.secondary} center>
-              Session: {params.sessionId}
-            </AppText>
+
+            <View style={styles.sessionCodeContainer}>
+              <AppText variant="body" color={theme.colors.text.secondary}>
+                Session Code:
+              </AppText>
+              <Pressable onPress={handleShareSession}>
+                <GlassCard intensity="light" style={styles.codeBadge}>
+                  <AppText
+                    variant="body"
+                    weight="bold"
+                    color={theme.colors.neon.cyan}
+                  >
+                    {session?.id || params.sessionId}
+                  </AppText>
+                  <Ionicons
+                    name="share-outline"
+                    size={16}
+                    color={theme.colors.neon.cyan}
+                    style={{ marginLeft: 8 }}
+                  />
+                </GlassCard>
+              </Pressable>
+            </View>
           </Animated.View>
 
           {/* Session Info with Sync Health */}
@@ -213,7 +292,9 @@ export default function PlayerRoomScreen() {
                   size={24}
                   color={theme.colors.neon.green}
                 />
-                <AppText variant="h4">12ms</AppText>
+                <AppText variant="h4">
+                  {members.length > 0 ? members[0].latency || 0 : 0}ms
+                </AppText>
                 <AppText variant="caption">Latency</AppText>
               </View>
               <View style={styles.divider} />
@@ -495,130 +576,91 @@ export default function PlayerRoomScreen() {
             </View>
 
             <View style={styles.deviceGrid}>
-              <GlassCard intensity="medium" style={styles.deviceCard}>
-                <LinearGradient
-                  colors={[...theme.gradients.party, "transparent"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.deviceGradient}
-                />
-                <View style={styles.deviceContent}>
-                  <View
-                    style={[
-                      styles.deviceAvatar,
-                      { backgroundColor: theme.colors.neon.pink },
-                    ]}
-                  >
-                    <AppText variant="body" weight="bold">
-                      YO
-                    </AppText>
-                  </View>
-                  <AppText variant="body" weight="semibold" numberOfLines={1}>
-                    You {isHost && "👑"}
-                  </AppText>
-                  <AppText variant="caption" numberOfLines={1}>
-                    iPhone 15 Pro
-                  </AppText>
-                  <View style={styles.deviceStatus}>
-                    <View style={[styles.statusDot, styles.statusOnline]} />
-                    <AppText variant="caption" style={styles.statusText}>
-                      Online
-                    </AppText>
-                  </View>
-                </View>
-              </GlassCard>
-
-              <GlassCard intensity="medium" style={styles.deviceCard}>
-                <LinearGradient
-                  colors={[...theme.gradients.sunset, "transparent"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.deviceGradient}
-                />
-                <View style={styles.deviceContent}>
-                  <View
-                    style={[
-                      styles.deviceAvatar,
-                      { backgroundColor: theme.colors.neon.cyan },
-                    ]}
-                  >
-                    <AppText variant="body" weight="bold">
-                      JD
-                    </AppText>
-                  </View>
-                  <AppText variant="body" weight="semibold" numberOfLines={1}>
-                    John Doe
-                  </AppText>
-                  <AppText variant="caption" numberOfLines={1}>
-                    Galaxy S23
-                  </AppText>
-                  <View style={styles.deviceStatus}>
-                    <View style={[styles.statusDot, styles.statusOnline]} />
-                    <AppText variant="caption" style={styles.statusText}>
-                      Online
-                    </AppText>
-                  </View>
-                </View>
-              </GlassCard>
-
-              <GlassCard intensity="medium" style={styles.deviceCard}>
-                <LinearGradient
-                  colors={[...theme.gradients.lime, "transparent"]}
-                  start={{ x: 0, y: 0 }}
-                  end={{ x: 1, y: 1 }}
-                  style={styles.deviceGradient}
-                />
-                <View style={styles.deviceContent}>
-                  <View
-                    style={[
-                      styles.deviceAvatar,
-                      { backgroundColor: theme.colors.neon.purple },
-                    ]}
-                  >
-                    <AppText variant="body" weight="bold">
-                      AS
-                    </AppText>
-                  </View>
-                  <AppText variant="body" weight="semibold" numberOfLines={1}>
-                    Alex Smith
-                  </AppText>
-                  <AppText variant="caption" numberOfLines={1}>
-                    iPad Pro
-                  </AppText>
-                  <View style={styles.deviceStatus}>
-                    <View style={[styles.statusDot, styles.statusOnline]} />
-                    <AppText variant="caption" style={styles.statusText}>
-                      Online
-                    </AppText>
-                  </View>
-                </View>
-              </GlassCard>
-
-              {/* Empty slots */}
-              {Array.from({ length: 5 }).map((_, index) => (
+              {members.map((member) => (
                 <GlassCard
-                  key={`empty-${index}`}
-                  intensity="light"
+                  key={member.id}
+                  intensity="medium"
                   style={styles.deviceCard}
                 >
+                  <LinearGradient
+                    colors={
+                      member.role === "host"
+                        ? [...theme.gradients.party, "transparent"]
+                        : [...theme.gradients.sunset, "transparent"]
+                    }
+                    start={{ x: 0, y: 0 }}
+                    end={{ x: 1, y: 1 }}
+                    style={styles.deviceGradient}
+                  />
                   <View style={styles.deviceContent}>
-                    <View style={styles.emptySlot}>
-                      <Ionicons
-                        name="add-circle-outline"
-                        size={32}
-                        color={theme.colors.text.tertiary}
-                      />
-                    </View>
-                    <AppText
-                      variant="caption"
-                      color={theme.colors.text.tertiary}
-                      center
+                    <View
+                      style={[
+                        styles.deviceAvatar,
+                        {
+                          backgroundColor:
+                            member.role === "host"
+                              ? theme.colors.neon.pink
+                              : theme.colors.neon.cyan,
+                        },
+                      ]}
                     >
-                      Empty Slot
+                      <AppText variant="body" weight="bold">
+                        {member.name.substring(0, 2).toUpperCase()}
+                      </AppText>
+                    </View>
+                    <AppText variant="body" weight="semibold" numberOfLines={1}>
+                      {member.name} {member.role === "host" && "👑"}
                     </AppText>
+                    <AppText variant="caption" numberOfLines={1}>
+                      {member.role === "host" ? "Host" : "Client"}
+                    </AppText>
+                    <View style={styles.deviceStatus}>
+                      <View
+                        style={[
+                          styles.statusDot,
+                          member.connectionStatus === "connected"
+                            ? styles.statusOnline
+                            : { backgroundColor: theme.colors.neon.orange },
+                        ]}
+                      />
+                      <AppText variant="caption" style={styles.statusText}>
+                        {member.connectionStatus
+                          ? member.connectionStatus.charAt(0).toUpperCase() +
+                            member.connectionStatus.slice(1)
+                          : "Unknown"}
+                      </AppText>
+                    </View>
                   </View>
                 </GlassCard>
               ))}
+
+              {/* Empty slots */}
+              {Array.from({ length: Math.max(0, 8 - members.length) }).map(
+                (_, index) => (
+                  <GlassCard
+                    key={`empty-${index}`}
+                    intensity="light"
+                    style={styles.deviceCard}
+                  >
+                    <View style={styles.deviceContent}>
+                      <View style={styles.emptySlot}>
+                        <Ionicons
+                          name="add-circle-outline"
+                          size={32}
+                          color={theme.colors.text.tertiary}
+                        />
+                      </View>
+                      <AppText
+                        variant="caption"
+                        color={theme.colors.text.tertiary}
+                        center
+                      >
+                        {isHost ? "Scanning..." : "Waiting..."}
+                      </AppText>
+                    </View>
+                  </GlassCard>
+                ),
+              )}
             </View>
           </Animated.View>
         </ScrollView>
@@ -660,6 +702,21 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
     alignItems: "center",
     marginBottom: theme.spacing.lg,
+  },
+  sessionCodeContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "center",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  codeBadge: {
+    flexDirection: "row",
+    alignItems: "center",
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
+    borderRadius: theme.borderRadius.full,
+    backgroundColor: theme.colors.glass.medium,
   },
   hostBadge: {
     flexDirection: "row",

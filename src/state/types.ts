@@ -125,6 +125,7 @@ export interface SessionActions {
 export type DeviceConnectionStatus =
   | "connected" // Active connection
   | "disconnected" // Lost connection
+  | "reconnecting" // Attempting to reconnect
   | "pending"; // Join request pending approval
 
 /**

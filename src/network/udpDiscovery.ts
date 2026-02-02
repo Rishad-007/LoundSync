@@ -3,13 +3,17 @@
  * Works when mDNS is unavailable
  */
 
-import UDP, { type DatagramSocket } from 'react-native-udp';
-import type { DiscoveredSessionData, SessionAdvertisement, DiscoveryOptions } from './types';
+import UDP, { type DatagramSocket } from "react-native-udp";
+import type {
+  DiscoveredSessionData,
+  DiscoveryOptions,
+  SessionAdvertisement,
+} from "./types";
 
 const UDP_BROADCAST_PORT = 9876;
-const BROADCAST_ADDRESS = '255.255.255.255';
-const DISCOVERY_MESSAGE = 'LOUDSYNC_DISCOVER';
-const RESPONSE_PREFIX = 'LOUDSYNC_RESPONSE:';
+const BROADCAST_ADDRESS = "255.255.255.255";
+const DISCOVERY_MESSAGE = "LOUDSYNC_DISCOVER";
+const RESPONSE_PREFIX = "LOUDSYNC_RESPONSE:";
 
 /**
  * UDP Broadcast Discovery Service
@@ -28,10 +32,10 @@ export class UDPDiscoveryService {
   async startScan(
     onSessionFound: (session: DiscoveredSessionData) => void,
     onSessionLost: (sessionId: string) => void,
-    options: DiscoveryOptions = {}
+    options: DiscoveryOptions = {},
   ): Promise<void> {
     if (this.isScanning) {
-      console.warn('[UDP] Scan already in progress');
+      console.warn("[UDP] Scan already in progress");
       return;
     }
 
@@ -39,29 +43,37 @@ export class UDPDiscoveryService {
     this.isScanning = true;
     this.sessions.clear();
 
-    console.log('[UDP] Starting UDP broadcast discovery...');
+    console.log("[UDP] Starting UDP broadcast discovery...");
 
     return new Promise((resolve, reject) => {
       try {
+        if (!UDP || typeof UDP.createSocket !== "function") {
+          throw new Error("UDP module not available or createSocket is not a function");
+        }
+
         // Create UDP socket
-        this.socket = UDP.createSocket({
-          type: 'udp4',
-        });
+        try {
+          this.socket = UDP.createSocket({
+            type: "udp4",
+          });
+        } catch (socketError) {
+          throw new Error(`UDP socket creation failed: ${socketError}`);
+        }
 
         // Listen for responses
-        this.socket.on('message', (msg: Buffer, rinfo: any) => {
+        this.socket.on("message", (msg: Buffer, rinfo: any) => {
           this.handleBroadcastResponse(
             msg.toString(),
             rinfo.address,
-            onSessionFound
+            onSessionFound,
           );
         });
 
-        this.socket.on('error', (error: any) => {
-          console.error('[UDP] Socket error:', error);
+        this.socket.on("error", (error: any) => {
+          console.error("[UDP] Socket error:", error);
         });
 
-        this.socket.bind(UDP_BROADCAST_PORT, '0.0.0.0', () => {
+        this.socket.bind(UDP_BROADCAST_PORT, "0.0.0.0", () => {
           // Enable broadcast
           this.socket?.setBroadcast(true);
 
@@ -77,7 +89,7 @@ export class UDPDiscoveryService {
           resolve();
         }, timeout);
       } catch (error) {
-        console.error('[UDP] Scan setup failed:', error);
+        console.error("[UDP] Scan setup failed:", error);
         this.isScanning = false;
         reject(error);
       }
@@ -90,7 +102,7 @@ export class UDPDiscoveryService {
   stopScan(): void {
     if (!this.isScanning) return;
 
-    console.log('[UDP] Stopping UDP discovery');
+    console.log("[UDP] Stopping UDP discovery");
 
     if (this.broadcastInterval) clearInterval(this.broadcastInterval);
     if (this.scanTimeout) clearTimeout(this.scanTimeout);
@@ -100,7 +112,7 @@ export class UDPDiscoveryService {
       this.socket = null;
       this.isScanning = false;
     } catch (error) {
-      console.error('[UDP] Error stopping scan:', error);
+      console.error("[UDP] Error stopping scan:", error);
     }
   }
 
@@ -118,12 +130,12 @@ export class UDPDiscoveryService {
         BROADCAST_ADDRESS,
         (error: any) => {
           if (error) {
-            console.error('[UDP] Broadcast send error:', error);
+            console.error("[UDP] Broadcast send error:", error);
           }
-        }
+        },
       );
     } catch (error) {
-      console.error('[UDP] Error sending broadcast:', error);
+      console.error("[UDP] Error sending broadcast:", error);
     }
   }
 
@@ -133,7 +145,7 @@ export class UDPDiscoveryService {
   private handleBroadcastResponse(
     message: string,
     fromAddress: string,
-    onSessionFound: (session: DiscoveredSessionData) => void
+    onSessionFound: (session: DiscoveredSessionData) => void,
   ): void {
     try {
       if (!message.startsWith(RESPONSE_PREFIX)) return;
@@ -148,7 +160,7 @@ export class UDPDiscoveryService {
 
       const discoveredSession: DiscoveredSessionData = {
         advertisement,
-        discoveryMethod: 'udp',
+        discoveryMethod: "udp",
         signalStrength: 75, // UDP is less reliable than mDNS
         lastSeen: Date.now(),
       };
@@ -158,14 +170,14 @@ export class UDPDiscoveryService {
       // Check if we've seen this session before
       if (!this.sessions.has(sessionId)) {
         console.log(
-          `[UDP] Found new session: ${sessionId} from ${fromAddress}`
+          `[UDP] Found new session: ${sessionId} from ${fromAddress}`,
         );
         onSessionFound(discoveredSession);
       }
 
       this.sessions.set(sessionId, discoveredSession);
     } catch (error) {
-      console.error('[UDP] Error parsing broadcast response:', error);
+      console.error("[UDP] Error parsing broadcast response:", error);
     }
   }
 
