@@ -37,7 +37,13 @@ export const EmptyState: React.FC<EmptyStateProps> = ({
   illustration,
 }) => {
   return (
-    <Animated.View entering={FadeIn.duration(600)} style={styles.container}>
+    <Animated.View
+      entering={FadeIn.duration(600)}
+      style={styles.container}
+      accessible={true}
+      accessibilityRole="text"
+      accessibilityLabel={`${title}. ${description}`}
+    >
       <GlassCard intensity="medium" style={styles.card}>
         <LinearGradient
           colors={[...theme.gradients[gradient], "transparent"]}
@@ -116,12 +122,12 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: "center",
     alignItems: "center",
-    padding: theme.spacing.xl,
+    padding: theme.responsive.spacing(theme.spacing.xl),
   },
   card: {
     width: "100%",
-    maxWidth: 400,
-    padding: theme.spacing['2xl'],
+    maxWidth: theme.responsive.maxContentWidth(),
+    padding: theme.responsive.spacing(theme.spacing["2xl"]),
     alignItems: "center",
   },
   backgroundGradient: {
@@ -134,15 +140,15 @@ const styles = StyleSheet.create({
   },
   content: {
     alignItems: "center",
-    gap: theme.spacing.xl,
+    gap: theme.responsive.spacing(theme.spacing.xl),
   },
   iconContainer: {
     marginBottom: theme.spacing.md,
   },
   iconCircle: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: theme.responsive.isTablet ? 180 : 140,
+    height: theme.responsive.isTablet ? 180 : 140,
+    borderRadius: theme.responsive.isTablet ? 90 : 70,
     overflow: "hidden",
     ...theme.shadows.neon,
   },
@@ -156,10 +162,11 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   description: {
-    maxWidth: 300,
-    lineHeight: 22,
+    maxWidth: theme.responsive.isTablet ? 400 : 300,
+    lineHeight: theme.responsive.isTablet ? 26 : 22,
   },
   actionContainer: {
     marginTop: theme.spacing.md,
+    minWidth: theme.responsive.isTablet ? 200 : 160,
   },
 });

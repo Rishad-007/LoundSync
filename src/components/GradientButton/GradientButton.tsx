@@ -144,6 +144,11 @@ export const GradientButton: React.FC<GradientButtonProps> = ({
         onPressOut={handlePressOut}
         onPress={onPress}
         activeOpacity={1}
+        accessible={true}
+        accessibilityRole="button"
+        accessibilityLabel={title}
+        accessibilityState={{ disabled: disabled || loading }}
+        accessibilityHint={loading ? "Loading" : undefined}
         {...props}
       >
         {/* Glow Effect */}

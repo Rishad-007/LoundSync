@@ -33,6 +33,9 @@ export const InlineEmptyState: React.FC<InlineEmptyStateProps> = ({
     <Animated.View
       entering={FadeIn.duration(400)}
       style={[styles.container, compact && styles.compact]}
+      accessible={true}
+      accessibilityRole="text"
+      accessibilityLabel={description ? `${title}. ${description}` : title}
     >
       <Ionicons
         name={icon}
@@ -66,13 +69,13 @@ export const InlineEmptyState: React.FC<InlineEmptyStateProps> = ({
 
 const styles = StyleSheet.create({
   container: {
-    paddingVertical: theme.spacing["2xl"],
-    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.responsive.spacing(theme.spacing["2xl"]),
+    paddingHorizontal: theme.responsive.spacing(theme.spacing.lg),
     alignItems: "center",
     justifyContent: "center",
   },
   compact: {
-    paddingVertical: theme.spacing.xl,
+    paddingVertical: theme.responsive.spacing(theme.spacing.xl),
   },
   icon: {
     opacity: 0.5,
@@ -83,7 +86,7 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   description: {
-    maxWidth: 250,
-    lineHeight: 18,
+    maxWidth: theme.responsive.isTablet ? 350 : 250,
+    lineHeight: theme.responsive.isTablet ? 22 : 18,
   },
 });
