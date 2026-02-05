@@ -27,7 +27,7 @@ import {
   GradientButton,
   IconButton,
 } from "../src/components";
-import { discoveryManager, sessionRegistry } from "../src/network";
+import { discoveryManager } from "../src/network";
 import type { DiscoveredSessionData } from "../src/network/types";
 import {
   useDiscoveredSessions,
@@ -155,14 +155,14 @@ export default function JoinSessionScreen() {
       let sessionIdToJoin: string;
 
       if (session) {
-        // Joining via discovered session (mDNS/UDP scan)
+        // Option 1: User tapped a card from the "Nearby Sessions" list
         sessionIdToJoin = session.advertisement.sessionId;
         console.log(
           "[JoinSession] Joining discovered session:",
           session.advertisement.sessionName,
         );
       } else {
-        // Joining via manual code entry
+        // Option 2: User manually entered a code
         if (!sessionCode.trim() || sessionCode.length < 7) {
           Alert.alert(
             "Invalid Code",
@@ -172,7 +172,7 @@ export default function JoinSessionScreen() {
           return;
         }
 
-        // Strip dashes and validate format
+        // Strip dashes to get the raw ID (e.g. "A1B-2C3" -> "A1B2C3")
         const cleanId = sessionCode.replace(/[^A-Z0-9]/g, "");
 
         if (cleanId.length !== 6) {
@@ -184,26 +184,48 @@ export default function JoinSessionScreen() {
           return;
         }
 
-        // Validate session code exists and is active
-        const validation = sessionRegistry.validateSessionCode(cleanId);
+        /**
+         * Search for a discovered session that matches the entered code.
+         * The code allows us to identify the correct session from the list.
+         */
+        const matchedSession = discoveredSessions.find((s) => {
+          const sId = s.advertisement.sessionId.replace(/[^A-Z0-9]/g, "");
+          return sId === cleanId;
+        });
 
-        if (!validation.valid) {
+        if (matchedSession) {
+          // Success! We found the signal matching the code.
+          sessionIdToJoin = matchedSession.advertisement.sessionId;
+          console.log(
+            "[JoinSession] Matched code to discovered session:",
+            cleanId,
+          );
+        } else {
+          // We haven't found the signal yet via mDNS/UDP
           Alert.alert(
-            "Cannot Join Session",
-            validation.reason ||
-              "The session code you entered is invalid or no longer active.",
+            "Session Not Detected",
+            `Looking for session "${sessionCode}"...\n\nEnsure you are on the same Wi-Fi as the host.`,
+            [
+              {
+                text: "Keep Scanning",
+                onPress: () => {
+                  // Trigger a fresh scan
+                  discoverSessions();
+                },
+              },
+              { text: "Cancel", style: "cancel" },
+            ],
           );
           setIsJoining(false);
           return;
         }
-
-        sessionIdToJoin = validation.sessionId!;
-        console.log("[JoinSession] Joining via code:", sessionCode);
       }
 
       setJoiningSessionId(sessionIdToJoin);
 
       // Join session via Zustand
+      // Note: joinSession internally looks up the session in the store's discoveredSessions list
+      // to resolve IP/Port. We ensured it's discovered above.
       await joinSession(sessionIdToJoin);
 
       console.log(

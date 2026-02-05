@@ -62,7 +62,6 @@ export default function CreateSessionScreen() {
     });
   };
 
-
   const handleCreateSession = async () => {
     try {
       setIsCreating(true);
